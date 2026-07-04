@@ -40,7 +40,7 @@ const emptyForm = {
   ticket_number: '', passenger_name: '', passport_number: '', airline: '', pnr: '',
   origin: 'DAC', destination: '', travel_date: '', return_date: '',
   cabin_class: 'economy', base_fare: 0, total_fare_input: 0, ut: 0, bd: 0, e5: 0, commission_rate: 0, tax_amount: 0, ait_amount: 0,
-  service_charge: 500, cost_fare: 0, status: 'issued',
+  service_charge: 0, cost_fare: 0, status: 'issued',
   supplier_id: '',
 };
 
@@ -197,6 +197,15 @@ export function IndividualTicketPage() {
       newData.base_fare = Math.round(total * 0.85);
       newData.total_fare_input = total;
     }
+
+    const utMatch = text.match(/UT\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*UT/i);
+    if (utMatch) newData.ut = parseInt(utMatch[1]);
+
+    const bdMatch = text.match(/BD\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*BD/i);
+    if (bdMatch) newData.bd = parseInt(bdMatch[1]);
+
+    const e5Match = text.match(/E5\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*E5/i);
+    if (e5Match) newData.e5 = parseInt(e5Match[1]);
 
     setForm(prev => ({ ...prev, ...newData }));
     setShowImportModal(false);
