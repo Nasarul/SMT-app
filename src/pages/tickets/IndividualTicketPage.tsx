@@ -39,7 +39,7 @@ interface Supplier {
 const emptyForm = {
   ticket_number: '', passenger_name: '', passport_number: '', airline: '', pnr: '',
   origin: 'DAC', destination: '', travel_date: '', return_date: '',
-  cabin_class: 'economy', base_fare: 0, total_fare_input: 0, ut: 0, bd: 0, e5: 0, commission_rate: 0, tax_amount: 0, ait_amount: 0,
+  cabin_class: 'economy', base_fare: 0, total_fare_input: 0, ut: 0, bd: 0, e5: 0, commission_rate: 7, tax_amount: 0, ait_amount: 0,
   service_charge: 0, cost_fare: 0, status: 'issued',
   supplier_id: '',
 };
@@ -57,6 +57,7 @@ export function IndividualTicketPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [gdsText, setGdsText] = useState('');
+  const [needsRecalc, setNeedsRecalc] = useState(false);
 
   // Dynamic Lists
   const [airlineList, setAirlineList] = useState<string[]>(AIRLINES_FROM_DAC);
@@ -96,14 +97,14 @@ export function IndividualTicketPage() {
     setLoading(false);
   };
 
-  const calcFare = () => {
-    const base = Math.max(0, Number(form.base_fare) || 0);
-    const total_input = Math.max(0, Number(form.total_fare_input) || 0);
-    const ut = Math.max(0, Number(form.ut) || 0);
-    const bd = Math.max(0, Number(form.bd) || 0);
-    const e5 = Math.max(0, Number(form.e5) || 0);
-    const comm_rate = Math.max(0, Number(form.commission_rate) || 0);
-    const svc = Math.max(0, Number(form.service_charge) || 0);
+  const getFareData = (fData: any = form) => {
+    const base = Math.max(0, Number(fData.base_fare) || 0);
+    const total_input = Math.max(0, Number(fData.total_fare_input) || 0);
+    const ut = Math.max(0, Number(fData.ut) || 0);
+    const bd = Math.max(0, Number(fData.bd) || 0);
+    const e5 = Math.max(0, Number(fData.e5) || 0);
+    const comm_rate = Math.max(0, Number(fData.commission_rate) || 0);
+    const svc = Math.max(0, Number(fData.service_charge) || 0);
 
     const tax_ait = total_input - base;
     const vat = (total_input - (ut + bd + e5)) * 0.03;
@@ -116,7 +117,18 @@ export function IndividualTicketPage() {
     return { base, total_input, ut, bd, e5, comm_rate, svc, tax_ait, vat, commission, total_commission, net_commission, total_client_fare, net_profit };
   };
 
+  const [fareData, setFareData] = useState(() => getFareData(emptyForm));
+
+  const handleRecalculate = () => {
+    setFareData(getFareData(form));
+    setNeedsRecalc(false);
+  };
+
   const handleSave = async () => {
+    if (needsRecalc) {
+      setError('Please click Recalculate before saving.');
+      return;
+    }
     if (!form.passenger_name || !form.airline || !form.origin || !form.destination || !form.travel_date) {
       setError('Please fill all required fields.');
       return;
@@ -124,7 +136,6 @@ export function IndividualTicketPage() {
     setSaving(true);
     setError('');
     
-    const fareData = calcFare();
     const cost_fare = fareData.total_client_fare - fareData.net_profit;
 
     const payload = {
@@ -170,7 +181,11 @@ export function IndividualTicketPage() {
     t.airline?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const f = (field: string, val: any) => setForm(prev => ({ ...prev, [field]: val }));
+  const fareFields = ['base_fare', 'total_fare_input', 'ut', 'bd', 'e5', 'commission_rate', 'service_charge'];
+  const f = (field: string, val: any) => {
+    setForm(prev => ({ ...prev, [field]: val }));
+    if (fareFields.includes(field)) setNeedsRecalc(true);
+  };
 
   const parseGDS = () => {
     const text = gdsText;
@@ -207,14 +222,17 @@ export function IndividualTicketPage() {
     const e5Match = text.match(/E5\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*E5/i);
     if (e5Match) newData.e5 = parseInt(e5Match[1]);
 
-    setForm(prev => ({ ...prev, ...newData }));
+    setForm(prev => {
+      const nextForm = { ...prev, ...newData };
+      setFareData(getFareData(nextForm));
+      setNeedsRecalc(false);
+      return nextForm;
+    });
     setShowImportModal(false);
     setGdsText('');
     setShowForm(true);
     setSuccess('Data parsed from GDS successfully! Please verify fields.');
   };
-
-  const fareData = calcFare();
 
   return (
     <div className="p-4 lg:p-6 animate-fade-in">
@@ -452,42 +470,52 @@ export function IndividualTicketPage() {
           </div>
 
           {/* Row 4: Calculations & Totals */}
-          <div className="flex flex-col md:flex-row gap-4 bg-primary-50/50 p-3 rounded-xl border border-primary-100">
+          <div className="flex justify-between items-end mb-2 mt-4">
+             <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Calculation Results</h3>
+             <button 
+                onClick={handleRecalculate}
+                disabled={!needsRecalc}
+                className={`py-1.5 px-4 text-xs font-bold rounded-lg transition-colors shadow-sm ${needsRecalc ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}`}
+             >
+               {needsRecalc ? 'Click to Recalculate' : 'Up to date'}
+             </button>
+          </div>
+          <div className={`flex flex-col md:flex-row gap-4 p-3 rounded-xl border transition-all ${needsRecalc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 'bg-primary-50/50 border-primary-100'}`}>
             <div className="flex-1 grid grid-cols-4 gap-2">
-              <div className="bg-white px-3 py-2 rounded-lg border border-primary-100/50 flex flex-col justify-center">
-                <span className="text-[9px] font-bold text-primary-400 uppercase tracking-wider block mb-0.5">Tax/AIT</span>
-                <span className="text-xs font-bold text-primary-900">{formatBDT(fareData.tax_ait)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Tax/AIT</span>
+                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.tax_ait)}</span>
               </div>
-              <div className="bg-white px-3 py-2 rounded-lg border border-primary-100/50 flex flex-col justify-center">
-                <span className="text-[9px] font-bold text-primary-400 uppercase tracking-wider block mb-0.5">VAT</span>
-                <span className="text-xs font-bold text-primary-900">{formatBDT(fareData.vat)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>VAT</span>
+                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.vat)}</span>
               </div>
-              <div className="bg-white px-3 py-2 rounded-lg border border-primary-100/50 flex flex-col justify-center">
-                <span className="text-[9px] font-bold text-primary-400 uppercase tracking-wider block mb-0.5">Total Comm.</span>
-                <span className="text-xs font-bold text-primary-900">{formatBDT(fareData.total_commission)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Total Comm.</span>
+                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.total_commission)}</span>
               </div>
-              <div className="bg-white px-3 py-2 rounded-lg border border-primary-100/50 flex flex-col justify-center">
-                <span className="text-[9px] font-bold text-primary-400 uppercase tracking-wider block mb-0.5">Net Comm.</span>
-                <span className="text-xs font-bold text-primary-900">{formatBDT(fareData.net_commission)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Net Comm.</span>
+                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.net_commission)}</span>
               </div>
             </div>
             
             <div className="flex items-stretch gap-2 shrink-0">
-              <div className="bg-primary-600 px-5 py-2 rounded-lg text-white text-right flex flex-col justify-center shadow-sm">
-                <span className="text-[9px] font-bold text-primary-200 uppercase tracking-wider block mb-0.5">Client Fare</span>
-                <span className="text-sm font-black">{formatBDT(fareData.total_client_fare)}</span>
+              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${needsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-primary-600 text-white'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-200'}`}>Client Fare</span>
+                <span className="text-sm font-black">{needsRecalc ? '---' : formatBDT(fareData.total_client_fare)}</span>
               </div>
-              <div className="bg-success-600 px-5 py-2 rounded-lg text-white text-right flex flex-col justify-center shadow-sm">
-                <span className="text-[9px] font-bold text-success-200 uppercase tracking-wider block mb-0.5">Net Profit</span>
-                <span className="text-sm font-black">{formatBDT(fareData.net_profit)}</span>
+              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${needsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-success-600 text-white'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-success-200'}`}>Net Profit</span>
+                <span className="text-sm font-black">{needsRecalc ? '---' : formatBDT(fareData.net_profit)}</span>
               </div>
             </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-2 border-t border-neutral-100 mt-1">
             <button onClick={() => setShowForm(false)} className="btn-ghost py-2 px-6 text-xs font-bold">Discard</button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary py-2 px-8 text-xs font-bold flex items-center justify-center gap-2">
-              {saving ? 'Processing...' : 'Issue Ticket & Save Account'}
+            <button onClick={handleSave} disabled={saving || needsRecalc} className={`py-2 px-8 text-xs font-bold flex items-center justify-center gap-2 rounded-lg transition-colors ${needsRecalc ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'btn-primary'}`}>
+              {saving ? 'Processing...' : (needsRecalc ? 'Recalculate First' : 'Issue Ticket & Save Account')}
             </button>
           </div>
         </div>
