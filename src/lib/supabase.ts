@@ -43,7 +43,9 @@ export const supabase = {
         let currentQueries: string[] = [];
         const builder = {
           eq: (field: string, value: any) => {
-            currentQueries.push(Query.equal(field, value));
+            // Map Supabase 'id' queries to Appwrite system '$id'
+            const mappedField = field === 'id' ? '$id' : field;
+            currentQueries.push(Query.equal(mappedField, value));
             return builder;
           },
           order: (field: string, options: { ascending?: boolean } = {}) => {
