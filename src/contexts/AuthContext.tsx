@@ -32,14 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      // Query profiles collection where 'id' matches the user's ID
-      // You must create a 'profiles' collection in Appwrite with an 'id' attribute
-      const response = await databases.listDocuments(databaseId, 'profiles', [
-        Query.equal('id', userId)
-      ]);
-      if (response.documents.length > 0) {
-        setProfile(response.documents[0] as unknown as Profile);
-      }
+      // Fetch the profile document directly using the user's ID
+      const profileDoc = await databases.getDocument(databaseId, 'profiles', userId);
+      setProfile(profileDoc as unknown as Profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
