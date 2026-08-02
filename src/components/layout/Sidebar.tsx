@@ -137,8 +137,10 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
     setMobileOpen(false);
   };
 
+  const normalizedRole = profile?.role?.toLowerCase().replace(/ /g, '_') || '';
+
   const visibleGroups = navGroups.filter(g =>
-    !profile || !g.roles || g.roles.includes(profile.role || '') || profile.role === 'super_admin'
+    !profile || !g.roles || g.roles.includes(normalizedRole) || normalizedRole === 'super_admin'
   );
 
   const SidebarContent = () => (
@@ -185,7 +187,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           <span>Dashboard</span>
         </button>
 
-        {(profile?.role === 'super_admin' || profile?.role === 'admin') && (
+        {(normalizedRole === 'super_admin' || normalizedRole === 'admin') && (
           <button
             onClick={() => handleNavClick('mobile-dashboard')}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 mb-4 ${
