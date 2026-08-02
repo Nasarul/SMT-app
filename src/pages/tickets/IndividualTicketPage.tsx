@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Plus, Search, Download, CreditCard as Edit2, CheckCircle, AlertCircle, MessageSquare } from 'lucide-react';
+import { Plane, Plus, Search, Download, CreditCard as Edit2, CheckCircle, AlertCircle, MessageSquare, Trash2 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -29,6 +29,7 @@ interface Ticket {
   created_at: string;
   supplier_id?: string;
   suppliers?: { company_name: string };
+  metadata?: string;
 }
 
 interface Supplier {
@@ -42,6 +43,7 @@ const emptyForm = {
   cabin_class: 'economy', base_fare: 0, total_fare_input: 0, ut: 0, bd: 0, e5: 0, commission_rate: 7, tax_amount: 0, ait_amount: 0,
   service_charge: 0, cost_fare: 0, status: 'issued',
   supplier_id: '',
+  metadata: [] as {key: string, value: string}[]
 };
 
 export function IndividualTicketPage() {
@@ -49,15 +51,20 @@ export function IndividualTicketPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  
+  // Multi-Passenger State
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [forms, setForms] = useState([{ ...emptyForm }]);
+  const [activeTab, setActiveTab] = useState(0);
+  const [needsRecalc, setNeedsRecalc] = useState<boolean[]>([false]);
+  
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [gdsText, setGdsText] = useState('');
-  const [needsRecalc, setNeedsRecalc] = useState(false);
+  const [isAiParsing, setIsAiParsing] = useState(false);
 
   // Dynamic Lists
   const [airlineList, setAirlineList] = useState<string[]>(AIRLINES_FROM_DAC);
@@ -97,7 +104,7 @@ export function IndividualTicketPage() {
     setLoading(false);
   };
 
-  const getFareData = (fData: any = form) => {
+  const getFareData = (fData: any) => {
     const base = Math.max(0, Number(fData.base_fare) || 0);
     const total_input = Math.max(0, Number(fData.total_fare_input) || 0);
     const ut = Math.max(0, Number(fData.ut) || 0);
@@ -117,58 +124,78 @@ export function IndividualTicketPage() {
     return { base, total_input, ut, bd, e5, comm_rate, svc, tax_ait, vat, commission, total_commission, net_commission, total_client_fare, net_profit };
   };
 
-  const [fareData, setFareData] = useState(() => getFareData(emptyForm));
+  const [fareDatas, setFareDatas] = useState<any[]>([getFareData(emptyForm)]);
 
   const handleRecalculate = () => {
-    setFareData(getFareData(form));
-    setNeedsRecalc(false);
+    setFareDatas(prev => {
+      const next = [...prev];
+      next[activeTab] = getFareData(forms[activeTab]);
+      return next;
+    });
+    setNeedsRecalc(prev => {
+      const next = [...prev];
+      next[activeTab] = false;
+      return next;
+    });
   };
 
   const handleSave = async () => {
-    if (needsRecalc) {
-      setError('Please click Recalculate before saving.');
+    if (needsRecalc.some(r => r)) {
+      setError('Please click Recalculate for all pending tabs before saving.');
       return;
     }
-    if (!form.passenger_name || !form.airline || !form.origin || !form.destination || !form.travel_date) {
-      setError('Please fill all required fields.');
-      return;
+    
+    for (let i = 0; i < forms.length; i++) {
+      const f = forms[i];
+      if (!f.passenger_name || !f.airline || !f.origin || !f.destination || !f.travel_date) {
+        setError(`Please fill all required fields for passenger ${i+1}.`);
+        setActiveTab(i);
+        return;
+      }
     }
+    
     setSaving(true);
     setError('');
     
-    const cost_fare = fareData.total_client_fare - fareData.net_profit;
+    const payloads = forms.map((f, i) => {
+      const fd = fareDatas[i];
+      const cost_fare = fd.total_client_fare - fd.net_profit;
+      return {
+        ticket_number: f.ticket_number,
+        passenger_name: f.passenger_name,
+        passport_number: f.passport_number,
+        airline: f.airline,
+        pnr: f.pnr,
+        origin: f.origin,
+        destination: f.destination,
+        travel_date: f.travel_date,
+        return_date: f.return_date || null,
+        cabin_class: f.cabin_class,
+        base_fare: fd.base,
+        tax_amount: fd.vat,
+        ait_amount: fd.tax_ait,
+        service_charge: fd.svc,
+        total_fare: fd.total_client_fare,
+        cost_fare: cost_fare,
+        profit: fd.net_profit,
+        status: f.status,
+        supplier_id: f.supplier_id || null,
+        ticket_type: 'individual',
+        sales_agent_id: profile?.id,
+        metadata: JSON.stringify(f.metadata || [])
+      };
+    });
 
-    const payload = {
-      ticket_number: form.ticket_number,
-      passenger_name: form.passenger_name,
-      passport_number: form.passport_number,
-      airline: form.airline,
-      pnr: form.pnr,
-      origin: form.origin,
-      destination: form.destination,
-      travel_date: form.travel_date,
-      return_date: form.return_date || null,
-      cabin_class: form.cabin_class,
-      base_fare: fareData.base,
-      tax_amount: fareData.vat,
-      ait_amount: fareData.tax_ait,
-      service_charge: fareData.svc,
-      total_fare: fareData.total_client_fare,
-      cost_fare: cost_fare,
-      profit: fareData.net_profit,
-      status: form.status,
-      supplier_id: form.supplier_id || null,
-      ticket_type: 'individual',
-      sales_agent_id: profile?.id,
-    };
-
-    const { error: err } = await supabase.from('air_tickets').insert([payload]);
+    const { error: err } = await supabase.from('air_tickets').insert(payloads);
     if (err) {
       setError(err.message);
     } else {
-      setSuccess('Ticket issued successfully!');
+      setSuccess(`${forms.length} Ticket(s) issued successfully!`);
       setShowForm(false);
-      setForm(emptyForm);
+      setForms([{ ...emptyForm }]);
+      setFareDatas([getFareData(emptyForm)]);
+      setNeedsRecalc([false]);
+      setActiveTab(0);
       loadTickets();
     }
     setSaving(false);
@@ -182,9 +209,64 @@ export function IndividualTicketPage() {
   );
 
   const fareFields = ['base_fare', 'total_fare_input', 'ut', 'bd', 'e5', 'commission_rate', 'service_charge'];
-  const f = (field: string, val: any) => {
-    setForm(prev => ({ ...prev, [field]: val }));
-    if (fareFields.includes(field)) setNeedsRecalc(true);
+  
+  const updateActiveForm = (field: string, val: any) => {
+    setForms(prev => {
+      const next = [...prev];
+      next[activeTab] = { ...next[activeTab], [field]: val };
+      return next;
+    });
+    if (fareFields.includes(field)) {
+      setNeedsRecalc(prev => {
+        const next = [...prev];
+        next[activeTab] = true;
+        return next;
+      });
+    }
+  };
+  
+  const updateMetadata = (idx: number, field: 'key' | 'value', val: string) => {
+    setForms(prev => {
+      const next = [...prev];
+      const newMeta = [...(next[activeTab].metadata || [])];
+      newMeta[idx] = { ...newMeta[idx], [field]: val };
+      next[activeTab] = { ...next[activeTab], metadata: newMeta };
+      return next;
+    });
+  };
+  
+  const addMetadataField = () => {
+    setForms(prev => {
+      const next = [...prev];
+      const newMeta = [...(next[activeTab].metadata || []), { key: '', value: '' }];
+      next[activeTab] = { ...next[activeTab], metadata: newMeta };
+      return next;
+    });
+  };
+  
+  const removeMetadataField = (idx: number) => {
+    setForms(prev => {
+      const next = [...prev];
+      const newMeta = [...(next[activeTab].metadata || [])];
+      newMeta.splice(idx, 1);
+      next[activeTab] = { ...next[activeTab], metadata: newMeta };
+      return next;
+    });
+  };
+  
+  const addNewPassengerTab = () => {
+    setForms(prev => [...prev, { ...emptyForm }]);
+    setFareDatas(prev => [...prev, getFareData(emptyForm)]);
+    setNeedsRecalc(prev => [...prev, false]);
+    setActiveTab(forms.length);
+  };
+  
+  const removePassengerTab = (indexToRemove: number) => {
+    if (forms.length <= 1) return;
+    setForms(prev => prev.filter((_, i) => i !== indexToRemove));
+    setFareDatas(prev => prev.filter((_, i) => i !== indexToRemove));
+    setNeedsRecalc(prev => prev.filter((_, i) => i !== indexToRemove));
+    setActiveTab(prev => (prev >= indexToRemove ? Math.max(0, prev - 1) : prev));
   };
 
   const parseGDS = () => {
@@ -222,17 +304,101 @@ export function IndividualTicketPage() {
     const e5Match = text.match(/E5\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*E5/i);
     if (e5Match) newData.e5 = parseInt(e5Match[1]);
 
-    setForm(prev => {
-      const nextForm = { ...prev, ...newData };
-      setFareData(getFareData(nextForm));
-      setNeedsRecalc(false);
-      return nextForm;
-    });
+    setForms([newData]);
+    setFareDatas([getFareData(newData)]);
+    setNeedsRecalc([false]);
+    setActiveTab(0);
+    
     setShowImportModal(false);
     setGdsText('');
     setShowForm(true);
     setSuccess('Data parsed from GDS successfully! Please verify fields.');
   };
+  
+  const parseWithAI = async () => {
+    setIsAiParsing(true);
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) throw new Error("Google AI Studio API key not found in .env (VITE_GEMINI_API_KEY)");
+
+      const prompt = `Parse the following flight GDS/ticket text and extract an array of passengers.
+For each passenger, return a JSON object with these exact keys:
+- passenger_name (string)
+- ticket_number (string, digits only, no spaces or hyphens)
+- pnr (string, exactly 6 chars)
+- airline (string)
+- origin (string, 3-letter IATA code)
+- destination (string, 3-letter IATA code)
+- travel_date (YYYY-MM-DD)
+- base_fare (number)
+- total_fare (number)
+- ut_tax (number, optional)
+- bd_tax (number, optional)
+- e5_tax (number, optional)
+- extra_info (array of objects {key: string, value: string} for things like baggage, meal, seat, visa)
+
+Text to parse:
+${gdsText}
+
+Return ONLY a valid JSON array of objects. Do not include markdown code block syntax.`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.message || "Failed to parse with AI");
+      
+      let aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+      aiResponse = aiResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+      
+      const parsedPassengers = JSON.parse(aiResponse);
+      
+      if (Array.isArray(parsedPassengers) && parsedPassengers.length > 0) {
+        const newForms = parsedPassengers.map(p => ({
+          ...emptyForm,
+          passenger_name: p.passenger_name || '',
+          ticket_number: p.ticket_number || '',
+          pnr: p.pnr || '',
+          airline: p.airline || '',
+          origin: p.origin || 'DAC',
+          destination: p.destination || '',
+          travel_date: p.travel_date || '',
+          base_fare: p.base_fare || 0,
+          total_fare_input: p.total_fare || 0,
+          ut: p.ut_tax || 0,
+          bd: p.bd_tax || 0,
+          e5: p.e5_tax || 0,
+          metadata: p.extra_info || []
+        }));
+        
+        setForms(newForms);
+        setFareDatas(newForms.map(f => getFareData(f)));
+        setNeedsRecalc(newForms.map(() => false));
+        setActiveTab(0);
+        
+        setShowImportModal(false);
+        setGdsText('');
+        setShowForm(true);
+        setSuccess(`AI Parsed successfully! Extracted ${newForms.length} passenger(s).`);
+      } else {
+         throw new Error("Invalid response format from AI");
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'AI parsing failed');
+    } finally {
+      setIsAiParsing(false);
+    }
+  };
+
+  const form = forms[activeTab] || emptyForm;
+  const fareData = fareDatas[activeTab] || getFareData(emptyForm);
+  const currentNeedsRecalc = needsRecalc[activeTab] || false;
 
   return (
     <div className="p-4 lg:p-6 animate-fade-in">
@@ -245,7 +411,15 @@ export function IndividualTicketPage() {
           <button onClick={() => setShowImportModal(true)} className="btn-outline flex items-center gap-2">
             <Download size={16} /> Import GDS PDF/Text
           </button>
-          <button onClick={() => { setShowForm(true); setError(''); setSuccess(''); }} className="btn-primary flex items-center gap-2">
+          <button onClick={() => { 
+            setShowForm(true); 
+            setError(''); 
+            setSuccess(''); 
+            setForms([{ ...emptyForm }]);
+            setFareDatas([getFareData(emptyForm)]);
+            setNeedsRecalc([false]);
+            setActiveTab(0);
+          }} className="btn-primary flex items-center gap-2">
             <Plus size={16} /> Issue New Ticket
           </button>
         </div>
@@ -300,10 +474,10 @@ export function IndividualTicketPage() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={8} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>
+                <tr><td colSpan={10} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={8}>
+                <tr><td colSpan={10}>
                   <EmptyState
                     icon={Plane}
                     title="No tickets found"
@@ -362,6 +536,35 @@ export function IndividualTicketPage() {
       {/* Issue Ticket Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Issue New Air Ticket" size="xl">
         <div className="p-5 flex flex-col gap-4">
+          
+          {/* Multi-Passenger Tabs */}
+          <div className="flex gap-1 border-b border-neutral-200 pb-2 mb-2 overflow-x-auto">
+            {forms.map((f, i) => (
+              <div key={i} className={`flex items-center rounded-t-lg transition-colors border-b-2 ${activeTab === i ? 'bg-primary-50 border-primary-600' : 'hover:bg-neutral-50 border-transparent'}`}>
+                <button 
+                  onClick={() => setActiveTab(i)}
+                  className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${activeTab === i ? 'text-primary-700' : 'text-neutral-500'}`}
+                >
+                  {f.passenger_name || `Passenger ${i+1}`}
+                </button>
+                {forms.length > 1 && (
+                  <button 
+                    onClick={() => removePassengerTab(i)}
+                    className="pr-2 pl-1 text-neutral-400 hover:text-error-500"
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+            ))}
+            <button 
+              onClick={addNewPassengerTab}
+              className="px-3 py-1.5 text-xs text-primary-600 font-semibold hover:bg-primary-50 rounded-t-lg flex items-center gap-1 border-b-2 border-transparent"
+            >
+              <Plus size={12} /> Add
+            </button>
+          </div>
+
           {error && (
             <div className="flex gap-2 p-2 bg-error-50 border border-error-200 text-error-700 rounded-lg text-[11px]">
               <AlertCircle size={14} className="shrink-0" /> {error}
@@ -372,23 +575,23 @@ export function IndividualTicketPage() {
           <div className="grid grid-cols-12 gap-3">
             <div className="col-span-3">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passenger Name *</label>
-              <input className="input-field py-1.5 px-2.5 text-xs" value={form.passenger_name} onChange={e => f('passenger_name', e.target.value)} placeholder="As per passport" />
+              <input className="input-field py-1.5 px-2.5 text-xs" value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport" />
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passport</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => f('passport_number', e.target.value.toUpperCase())} />
+              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} />
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">PNR *</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.pnr} onChange={e => f('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
+              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.pnr} onChange={e => updateActiveForm('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
             </div>
             <div className="col-span-3">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ticket Number</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono" value={form.ticket_number || ''} onChange={e => f('ticket_number', e.target.value)} placeholder="13-digit" />
+              <input className="input-field py-1.5 px-2.5 text-xs font-mono" value={form.ticket_number || ''} onChange={e => updateActiveForm('ticket_number', e.target.value)} placeholder="13-digit" />
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Source</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.supplier_id} onChange={e => f('supplier_id', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs" value={form.supplier_id} onChange={e => updateActiveForm('supplier_id', e.target.value)}>
                 <option value="">Direct / GDS</option>
                 {suppliers.map(s => (
                   <option key={s.id} value={s.id}>{s.company_name}</option>
@@ -401,35 +604,35 @@ export function IndividualTicketPage() {
           <div className="grid grid-cols-12 gap-3">
             <div className="col-span-3">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Airline *</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.airline} onChange={e => f('airline', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs" value={form.airline} onChange={e => updateActiveForm('airline', e.target.value)}>
                 <option value="">Select airline</option>
                 {airlineList.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Origin</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.origin} onChange={e => f('origin', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs" value={form.origin} onChange={e => updateActiveForm('origin', e.target.value)}>
                 {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Destination</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.destination} onChange={e => f('destination', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs" value={form.destination} onChange={e => updateActiveForm('destination', e.target.value)}>
                 <option value="">Select</option>
                 {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Travel Date *</label>
-              <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.travel_date} onChange={e => f('travel_date', e.target.value)} />
+              <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.travel_date} onChange={e => updateActiveForm('travel_date', e.target.value)} />
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Return Date</label>
-              <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.return_date} onChange={e => f('return_date', e.target.value)} />
+              <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.return_date} onChange={e => updateActiveForm('return_date', e.target.value)} />
             </div>
             <div className="col-span-1">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Class</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.cabin_class} onChange={e => f('cabin_class', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs" value={form.cabin_class} onChange={e => updateActiveForm('cabin_class', e.target.value)}>
                 <option value="economy">Economy</option>
                 <option value="business">Business</option>
                 <option value="first">First</option>
@@ -441,81 +644,120 @@ export function IndividualTicketPage() {
           <div className="grid grid-cols-7 gap-3 bg-neutral-50 p-3 rounded-xl border border-neutral-100">
             <div>
               <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Base Fare *</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.base_fare} onChange={e => f('base_fare', e.target.value)} />
+              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.base_fare} onChange={e => updateActiveForm('base_fare', e.target.value)} />
             </div>
             <div>
               <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Total Fare *</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.total_fare_input} onChange={e => f('total_fare_input', e.target.value)} />
+              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.total_fare_input} onChange={e => updateActiveForm('total_fare_input', e.target.value)} />
             </div>
             <div>
               <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">UT</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.ut} onChange={e => f('ut', e.target.value)} />
+              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.ut} onChange={e => updateActiveForm('ut', e.target.value)} />
             </div>
             <div>
               <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">BD</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.bd} onChange={e => f('bd', e.target.value)} />
+              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.bd} onChange={e => updateActiveForm('bd', e.target.value)} />
             </div>
             <div>
               <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">E5</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.e5} onChange={e => f('e5', e.target.value)} />
+              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.e5} onChange={e => updateActiveForm('e5', e.target.value)} />
             </div>
             <div>
               <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Comm. (%)</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.commission_rate} onChange={e => f('commission_rate', e.target.value)} />
+              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.commission_rate} onChange={e => updateActiveForm('commission_rate', e.target.value)} />
             </div>
             <div>
               <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Service Chg</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold" value={form.service_charge} onChange={e => f('service_charge', e.target.value)} />
+              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold" value={form.service_charge} onChange={e => updateActiveForm('service_charge', e.target.value)} />
             </div>
+          </div>
+          
+          {/* Dynamic Custom Fields */}
+          <div className="bg-white border rounded-xl p-3">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-[11px] font-bold text-neutral-600 uppercase">Additional Info (Dynamic Fields)</h3>
+              <button onClick={addMetadataField} className="text-[11px] text-primary-600 font-semibold flex items-center gap-1 hover:underline">
+                <Plus size={12} /> Add Custom Field
+              </button>
+            </div>
+            {(!form.metadata || form.metadata.length === 0) && (
+               <p className="text-xs text-neutral-400 italic">No custom fields added. E.g. Baggage, Meal Preference, Seat.</p>
+            )}
+            {form.metadata?.map((meta, idx) => (
+              <div key={idx} className="flex gap-2 mb-2">
+                <input 
+                  className="input-field py-1.5 px-2.5 text-xs w-1/3 bg-neutral-50" 
+                  placeholder="Field Name (e.g. Baggage)" 
+                  value={meta.key} 
+                  onChange={e => updateMetadata(idx, 'key', e.target.value)} 
+                />
+                <input 
+                  className="input-field py-1.5 px-2.5 text-xs flex-1" 
+                  placeholder="Value (e.g. 30 KG)" 
+                  value={meta.value} 
+                  onChange={e => updateMetadata(idx, 'value', e.target.value)} 
+                />
+                <button 
+                  onClick={() => removeMetadataField(idx)} 
+                  className="text-error-400 hover:text-error-600 p-1.5 hover:bg-error-50 rounded transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
           </div>
 
           {/* Row 4: Calculations & Totals */}
-          <div className="flex justify-between items-end mb-2 mt-4">
-             <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Calculation Results</h3>
+          <div className="flex justify-between items-end mb-2 mt-2">
+             <h3 className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider">Calculation Results</h3>
              <button 
                 onClick={handleRecalculate}
-                disabled={!needsRecalc}
-                className={`py-1.5 px-4 text-xs font-bold rounded-lg transition-colors shadow-sm ${needsRecalc ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}`}
+                disabled={!currentNeedsRecalc}
+                className={`py-1.5 px-4 text-xs font-bold rounded-lg transition-colors shadow-sm ${currentNeedsRecalc ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}`}
              >
-               {needsRecalc ? 'Click to Recalculate' : 'Up to date'}
+               {currentNeedsRecalc ? 'Click to Recalculate' : 'Up to date'}
              </button>
           </div>
-          <div className={`flex flex-col md:flex-row gap-4 p-3 rounded-xl border transition-all ${needsRecalc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 'bg-primary-50/50 border-primary-100'}`}>
+          <div className={`flex flex-col md:flex-row gap-4 p-3 rounded-xl border transition-all ${currentNeedsRecalc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 'bg-primary-50/50 border-primary-100'}`}>
             <div className="flex-1 grid grid-cols-4 gap-2">
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Tax/AIT</span>
-                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.tax_ait)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Tax/AIT</span>
+                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.tax_ait)}</span>
               </div>
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>VAT</span>
-                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.vat)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>VAT</span>
+                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.vat)}</span>
               </div>
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Total Comm.</span>
-                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.total_commission)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Total Comm.</span>
+                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.total_commission)}</span>
               </div>
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${needsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Net Comm.</span>
-                <span className={`text-xs font-bold ${needsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{needsRecalc ? '---' : formatBDT(fareData.net_commission)}</span>
+              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Net Comm.</span>
+                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.net_commission)}</span>
               </div>
             </div>
             
             <div className="flex items-stretch gap-2 shrink-0">
-              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${needsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-primary-600 text-white'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-primary-200'}`}>Client Fare</span>
-                <span className="text-sm font-black">{needsRecalc ? '---' : formatBDT(fareData.total_client_fare)}</span>
+              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-primary-600 text-white'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-200'}`}>Client Fare</span>
+                <span className="text-sm font-black">{currentNeedsRecalc ? '---' : formatBDT(fareData.total_client_fare)}</span>
               </div>
-              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${needsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-success-600 text-white'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${needsRecalc ? 'text-neutral-400' : 'text-success-200'}`}>Net Profit</span>
-                <span className="text-sm font-black">{needsRecalc ? '---' : formatBDT(fareData.net_profit)}</span>
+              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-success-600 text-white'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-success-200'}`}>Net Profit</span>
+                <span className="text-sm font-black">{currentNeedsRecalc ? '---' : formatBDT(fareData.net_profit)}</span>
               </div>
             </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-2 border-t border-neutral-100 mt-1">
             <button onClick={() => setShowForm(false)} className="btn-ghost py-2 px-6 text-xs font-bold">Discard</button>
-            <button onClick={handleSave} disabled={saving || needsRecalc} className={`py-2 px-8 text-xs font-bold flex items-center justify-center gap-2 rounded-lg transition-colors ${needsRecalc ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'btn-primary'}`}>
-              {saving ? 'Processing...' : (needsRecalc ? 'Recalculate First' : 'Issue Ticket & Save Account')}
+            <button 
+              onClick={handleSave} 
+              disabled={saving || needsRecalc.some(r => r)} 
+              className={`py-2 px-8 text-xs font-bold flex items-center justify-center gap-2 rounded-lg transition-colors ${needsRecalc.some(r => r) ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'btn-primary'}`}
+            >
+              {saving ? 'Processing...' : (needsRecalc.some(r => r) ? 'Recalculate Pending Tabs' : 'Issue Ticket & Save Account')}
             </button>
           </div>
         </div>
@@ -526,7 +768,7 @@ export function IndividualTicketPage() {
         <div className="p-5 space-y-4">
           <div className="p-4 bg-primary-50 rounded-lg border border-primary-100">
             <p className="text-sm text-primary-800 leading-relaxed">
-              <strong>How to use:</strong> Open your GDS PDF, select all text (Ctrl+A), copy it (Ctrl+C), and paste it into the box below. The system will automatically extract passenger, flight, and fare details.
+              <strong>How to use:</strong> Open your GDS PDF, select all text (Ctrl+A), copy it (Ctrl+C), and paste it into the box below. The system will automatically extract passenger, flight, and fare details. You can use standard parsing or AI parsing.
             </p>
           </div>
           <div>
@@ -538,14 +780,23 @@ export function IndividualTicketPage() {
               onChange={e => setGdsText(e.target.value)}
             />
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-2">
             <button onClick={() => setShowImportModal(false)} className="btn-ghost flex-1">Cancel</button>
             <button 
               onClick={parseGDS} 
-              disabled={!gdsText.trim()} 
-              className="btn-primary flex-1 flex items-center justify-center gap-2"
+              disabled={!gdsText.trim() || isAiParsing} 
+              className="btn-outline flex-1 flex items-center justify-center gap-2"
+              title="Fast Regex Parser"
             >
-              Analyze & Sync
+              Standard Parse
+            </button>
+            <button 
+              onClick={parseWithAI} 
+              disabled={!gdsText.trim() || isAiParsing} 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex-1 flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50"
+              title="Smart AI Parser (Recommended for complex or multi-passenger tickets)"
+            >
+              {isAiParsing ? 'AI Parsing...' : 'Parse with AI (Smart)'}
             </button>
           </div>
         </div>

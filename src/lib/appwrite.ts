@@ -4,7 +4,7 @@ const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT as string;
 const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID as string;
 export const databaseId = import.meta.env.VITE_APPWRITE_DATABASE_ID as string;
 
-const client = new Client()
+export const client = new Client()
     .setEndpoint(endpoint || 'https://sgp.cloud.appwrite.io/v1')
     .setProject(projectId || '');
 
