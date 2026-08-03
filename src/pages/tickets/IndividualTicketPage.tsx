@@ -280,39 +280,55 @@ export function IndividualTicketPage() {
 
     const newData = { ...emptyForm };
 
-    // 1. Passenger Name
-    const nameMatch = 
-      text.match(/NAME:\s*([A-Z/,\s.]+)/i) || 
-      text.match(/PASSENGER NAME:\s*([A-Z/,\s.]+)/i) ||
-      text.match(/PASSENGER:\s*([A-Z/,\s.]+)/i) ||
-      text.match(/PREPARED FOR\s*:?\s*([A-Z/,\s.]+)/i) ||
-      text.match(/PAX:\s*([A-Z/,\s.]+)/i) ||
-      text.match(/1\.([A-Z/,\s]+)/i) ||
-      text.match(/([A-Z]{2,}\/[A-Z]{2,}(?:\s+MR|\s+MS|\s+MRS|\s+MSTR|\s+MISS)?)/i);
-    
-    if (nameMatch) {
-      newData.passenger_name = nameMatch[1].replace(/[\r\n]+/g, ' ').trim();
+    // 1. Passenger Name (Filter out dictionary/system terms like Prize/Promo, error/message, Economy, etc.)
+    const forbiddenWords = ['PRIZE', 'PROMO', 'ERROR', 'MESSAGE', 'ECONOMY', 'BUSINESS', 'FIRST', 'ADULT', 'CHILD', 'INFANT', 'TERMS', 'CONDITIONS', 'PAYMENT', 'METHOD', 'CREDIT', 'DEBIT', 'TOTAL', 'FARE', 'TAX', 'FEE', 'REF', 'CODE', 'BOOKING', 'STATUS', 'ISSUED', 'DATE', 'FLIGHT', 'TICKET', 'COUPON', 'NOTICE', 'AGENCY', 'COMPANY', 'US-BANGLA', 'BIMAN', 'AIRLINE', 'AIRLINES', 'ROUTING', 'ENDORSEMENT', 'CHECK-IN', 'BAGGAGE'];
+
+    let extractedName = '';
+
+    const namePrefixMatch = 
+      text.match(/(?:PASSENGER NAME|PASSENGER|PREPARED FOR|NAME|PAX)\s*:?\s*([A-Z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|FORM OF|FOOP|RL|REF|\r|\n|$))/i) ||
+      text.match(/(?:1\.|2\.|3\.)\s*([A-Z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|\r|\n|$))/i);
+
+    if (namePrefixMatch) {
+      const candidate = namePrefixMatch[1].replace(/[\r\n]+/g, ' ').trim();
+      const upperCand = candidate.toUpperCase();
+      if (!forbiddenWords.some(w => upperCand.includes(w)) && candidate.length > 2) {
+        extractedName = candidate;
+      }
     }
 
-    // 2. PNR / Booking Ref
-    const pnrMatch = 
-      text.match(/BOOKING REF\s*:\s*(?:AMADEUS|SABRE|GALILEO)?\s*:?\s*([A-Z0-9]{6})/i) || 
-      text.match(/RESERVATION CODE\s*:?\s*([A-Z0-9]{6})/i) ||
-      text.match(/RESERVATION NUMBER\s*:?\s*([A-Z0-9]{6})/i) ||
-      text.match(/RECORD LOCATOR\s*:?\s*([A-Z0-9]{6})/i) ||
-      text.match(/PNR\s*:?\s*([A-Z0-9]{6})/i) ||
-      text.match(/CONFIRMATION\s*:?\s*([A-Z0-9]{6})/i) ||
-      text.match(/REF\s*:?\s*([A-Z0-9]{6})/i);
-      
-    if (pnrMatch) {
-      newData.pnr = pnrMatch[1].trim().toUpperCase();
+    if (!extractedName) {
+      const surnameMatch = text.match(/\b([A-Z]{2,}\/[A-Z\s]{2,}(?:\s+(?:MR|MS|MRS|MSTR|MISS))\b)/i);
+      if (surnameMatch) {
+        const cand = surnameMatch[1].trim();
+        const upper = cand.toUpperCase();
+        if (!forbiddenWords.some(w => upper.includes(w))) {
+          extractedName = cand;
+        }
+      }
     }
 
-    // 3. Ticket Number
+    if (extractedName) {
+      newData.passenger_name = extractedName;
+    }
+
+    // 2. PNR / Booking Ref (Strict 6-char alphanumeric check excluding ERENCE, NUMBER, etc.)
+    const invalidPnrs = ['ERENCE', 'NUMBER', 'AMADEU', 'GALILE', 'SABRE', 'REFNUM', 'CODE00', 'STATUS'];
+    const pnrMatches = [
+      ...text.matchAll(/(?:PNR|BOOKING REF|RESERVATION CODE|RESERVATION NO|RECORD LOCATOR|CONFIRMATION|RL)\s*:?\s*([A-Z0-9]{6})\b/gi)
+    ];
+
+    for (const match of pnrMatches) {
+      const val = match[1].toUpperCase();
+      if (!invalidPnrs.includes(val) && !/^\d{6}$/.test(val) && /^[A-Z0-9]{6}$/.test(val)) {
+        newData.pnr = val;
+        break;
+      }
+    }
+
+    // 3. Ticket Number (10 to 14 digits)
     const tktMatch = 
-      text.match(/TICKET NUMBER\s*:?\s*([0-9\s-]{10,20})/i) || 
-      text.match(/ETKT\s*:?\s*([0-9\s-]{10,20})/i) ||
-      text.match(/TICKET\s*:?\s*([0-9\s-]{10,20})/i) ||
+      text.match(/(?:TICKET NUMBER|ETKT|TICKET)\s*:?\s*([0-9\s-]{10,20})/i) ||
       text.match(/\b(\d{3}[-\s]?\d{10})\b/);
       
     if (tktMatch) {
@@ -336,17 +352,31 @@ export function IndividualTicketPage() {
     else if (/THAI AIRWAYS|TG\b/i.test(text)) newData.airline = 'Thai Airways';
     else if (/INDIGO|6E\b/i.test(text)) newData.airline = 'IndiGo';
 
-    // 5. Total & Fares
+    // 5. Total & Base Fare Extraction
+    const fareMatch = 
+      text.match(/(?:BASE FARE|EQUIV FARE|FARE AMOUNT|FARE)\s*:?\s*(?:BDT|USD)?\s*([\d,]+)/i);
+    
     const totalMatch = 
-      text.match(/TOTAL\s*:\s*BDT\s*([\d,]+)/i) || 
-      text.match(/TOTAL\s*BDT\s*([\d,]+)/i) ||
-      text.match(/TOTAL FARE\s*:?\s*BDT?\s*([\d,]+)/i) ||
-      text.match(/GRAND TOTAL\s*:?\s*BDT?\s*([\d,]+)/i);
+      text.match(/(?:TOTAL FARE|TOTAL AMOUNT|GRAND TOTAL|TOTAL)\s*:?\s*(?:BDT|USD)?\s*([\d,]+)/i) ||
+      text.match(/BDT\s*([\d,]{4,8})/i);
 
     if (totalMatch) {
-      const total = parseInt(totalMatch[1].replace(/,/g, ''));
-      newData.base_fare = Math.round(total * 0.85);
-      newData.total_fare_input = total;
+      const totalVal = parseInt(totalMatch[1].replace(/,/g, ''));
+      if (totalVal > 0) {
+        newData.total_fare_input = totalVal;
+        if (fareMatch) {
+          const fareVal = parseInt(fareMatch[1].replace(/,/g, ''));
+          newData.base_fare = fareVal > 0 ? fareVal : Math.round(totalVal * 0.85);
+        } else {
+          newData.base_fare = Math.round(totalVal * 0.85);
+        }
+      }
+    } else if (fareMatch) {
+      const fareVal = parseInt(fareMatch[1].replace(/,/g, ''));
+      if (fareVal > 0) {
+        newData.base_fare = fareVal;
+        newData.total_fare_input = Math.round(fareVal * 1.15);
+      }
     }
 
     // 6. Tax Breakdown
@@ -359,7 +389,7 @@ export function IndividualTicketPage() {
     const e5Match = text.match(/E5\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*E5/i);
     if (e5Match) newData.e5 = parseInt(e5Match[1].replace(/,/g, ''));
 
-    // Validation check: ensure we extracted at least passenger name, PNR, or ticket number
+    // Validation check
     if (!newData.passenger_name && !newData.pnr && !newData.ticket_number && !newData.total_fare_input) {
       setImportError('Could not detect passenger name or PNR in the pasted text. Please paste the ticket itinerary / booking confirmation containing passenger name and PNR.');
       return;
@@ -391,26 +421,26 @@ export function IndividualTicketPage() {
         throw new Error("Google AI API Key (VITE_GEMINI_API_KEY) not found in configuration.");
       }
 
-      const prompt = `Parse the following flight GDS/ticket text and extract an array of passengers.
-For each passenger, return a JSON object with these exact keys:
-- passenger_name (string)
-- ticket_number (string, digits only, no spaces or hyphens)
-- pnr (string, 6 alphanumeric characters)
-- airline (string)
-- origin (string, 3-letter IATA code)
-- destination (string, 3-letter IATA code)
-- travel_date (YYYY-MM-DD)
-- base_fare (number)
-- total_fare (number)
-- ut_tax (number, optional)
-- bd_tax (number, optional)
-- e5_tax (number, optional)
-- extra_info (array of objects {key: string, value: string} for baggage, meal, seat, etc.)
+      const prompt = `You are an expert aviation and travel agency ticket parser. Analyze the following GDS / e-Ticket text (from Amadeus, Sabre, Galileo, US-Bangla Airlines, Biman Bangladesh, Air Arabia, flydubai, Saudia, Emirates, etc.) and extract an array of passenger ticket objects.
+
+CRITICAL PARSING RULES:
+1. "passenger_name": Extract ONLY actual human passenger names (e.g. "RAHMAN/SAYEDUR MR" or "MD NASARUL HASAN"). NEVER output dictionary words, legal notices, terms, disclaimers, or labels like "Prize/Promo", "error/message", "Terms/Conditions", "Adult/Child", "Economy", "Payment".
+2. "pnr": Extract the 6-character alphanumeric booking reference / PNR code (e.g. "A1B2C3"). Do NOT output words like "ERENCE" or "NUMBER".
+3. "ticket_number": Extract 10 to 14 digit e-ticket numbers (e.g. "7791234567890" or "202-9876543210"). Digits only.
+4. "airline": Detect the operating/issuing airline (e.g. "US-Bangla Airlines", "Biman Bangladesh Airlines", "Air Arabia", "flydubai", "Emirates", "Saudia", "Qatar Airways").
+5. "origin" & "destination": 3-letter IATA airport/city codes (e.g. "DAC", "CGP", "ZYL", "DXB", "JED", "MED", "RUH", "KUL", "SIN", "BKK").
+6. "travel_date": Date of flight in YYYY-MM-DD format.
+7. "base_fare": Base flight fare as a number.
+8. "total_fare": Total ticket price paid as a number.
+9. "ut_tax", "bd_tax", "e5_tax": Tax breakdown amounts if present.
+10. "extra_info": Array of key-value objects for baggage allowance, meal, seat, class, etc.
 
 Text to parse:
+"""
 ${text}
+"""
 
-Return ONLY a valid JSON array of objects. Do not include markdown formatting or commentary.`;
+Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown code blocks or add explanatory text.`;
 
       const candidateModels = [
         'gemini-2.0-flash',
