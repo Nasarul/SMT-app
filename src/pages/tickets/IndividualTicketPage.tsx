@@ -65,6 +65,7 @@ export function IndividualTicketPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [gdsText, setGdsText] = useState('');
   const [isAiParsing, setIsAiParsing] = useState(false);
+  const [importError, setImportError] = useState('');
 
   // Dynamic Lists
   const [airlineList, setAirlineList] = useState<string[]>(AIRLINES_FROM_DAC);
@@ -270,39 +271,99 @@ export function IndividualTicketPage() {
   };
 
   const parseGDS = () => {
-    const text = gdsText;
+    setImportError('');
+    const text = gdsText.trim();
+    if (!text) {
+      setImportError('Please paste ticket text before parsing.');
+      return;
+    }
+
     const newData = { ...emptyForm };
 
-    const nameMatch = text.match(/NAME:\s*([A-Z/,\s]+)/i) || 
-                     text.match(/PASSENGER NAME:\s*([A-Z/,\s]+)/i) ||
-                     text.match(/PREPARED FOR\s*([A-Z/,\s]+)/i);
-    if (nameMatch) newData.passenger_name = nameMatch[1].trim();
+    // 1. Passenger Name
+    const nameMatch = 
+      text.match(/NAME:\s*([A-Z/,\s.]+)/i) || 
+      text.match(/PASSENGER NAME:\s*([A-Z/,\s.]+)/i) ||
+      text.match(/PASSENGER:\s*([A-Z/,\s.]+)/i) ||
+      text.match(/PREPARED FOR\s*:?\s*([A-Z/,\s.]+)/i) ||
+      text.match(/PAX:\s*([A-Z/,\s.]+)/i) ||
+      text.match(/1\.([A-Z/,\s]+)/i) ||
+      text.match(/([A-Z]{2,}\/[A-Z]{2,}(?:\s+MR|\s+MS|\s+MRS|\s+MSTR|\s+MISS)?)/i);
+    
+    if (nameMatch) {
+      newData.passenger_name = nameMatch[1].replace(/[\r\n]+/g, ' ').trim();
+    }
 
-    const pnrMatch = text.match(/BOOKING REF\s*:\s*AMADEUS:\s*([A-Z0-9]{6})/i) || 
-                    text.match(/RESERVATION CODE\s*:\s*([A-Z0-9]{6})/i) ||
-                    text.match(/RESERVATION NUMBER:\s*([A-Z0-9]{6})/i);
-    if (pnrMatch) newData.pnr = pnrMatch[1].trim().toUpperCase();
+    // 2. PNR / Booking Ref
+    const pnrMatch = 
+      text.match(/BOOKING REF\s*:\s*(?:AMADEUS|SABRE|GALILEO)?\s*:?\s*([A-Z0-9]{6})/i) || 
+      text.match(/RESERVATION CODE\s*:?\s*([A-Z0-9]{6})/i) ||
+      text.match(/RESERVATION NUMBER\s*:?\s*([A-Z0-9]{6})/i) ||
+      text.match(/RECORD LOCATOR\s*:?\s*([A-Z0-9]{6})/i) ||
+      text.match(/PNR\s*:?\s*([A-Z0-9]{6})/i) ||
+      text.match(/CONFIRMATION\s*:?\s*([A-Z0-9]{6})/i) ||
+      text.match(/REF\s*:?\s*([A-Z0-9]{6})/i);
+      
+    if (pnrMatch) {
+      newData.pnr = pnrMatch[1].trim().toUpperCase();
+    }
 
-    const tktMatch = text.match(/TICKET NUMBER\s*:?\s*([0-9\s-]{10,20})/i) || 
-                    text.match(/ETKT\s*([0-9\s-]{10,20})/i);
-    if (tktMatch) newData.ticket_number = tktMatch[1].replace(/[\s-]/g, '').trim();
+    // 3. Ticket Number
+    const tktMatch = 
+      text.match(/TICKET NUMBER\s*:?\s*([0-9\s-]{10,20})/i) || 
+      text.match(/ETKT\s*:?\s*([0-9\s-]{10,20})/i) ||
+      text.match(/TICKET\s*:?\s*([0-9\s-]{10,20})/i) ||
+      text.match(/\b(\d{3}[-\s]?\d{10})\b/);
+      
+    if (tktMatch) {
+      newData.ticket_number = tktMatch[1].replace(/[\s-]/g, '').trim();
+    }
 
-    const totalMatch = text.match(/TOTAL\s*:\s*BDT\s*(\d+)/i) || 
-                      text.match(/TOTAL\s*BDT\s*(\d+)/i);
+    // 4. Airline Detection
+    if (/US-BANGLA|US BANGLA|BS\b/i.test(text)) newData.airline = 'US-Bangla Airlines';
+    else if (/BIMAN|BANGLADESH AIRLINES|BG\b/i.test(text)) newData.airline = 'Biman Bangladesh Airlines';
+    else if (/AIR ARABIA|G9\b/i.test(text)) newData.airline = 'Air Arabia';
+    else if (/FLYDUBAI|FZ\b/i.test(text)) newData.airline = 'flydubai';
+    else if (/EMIRATES|EK\b/i.test(text)) newData.airline = 'Emirates';
+    else if (/SAUDIA|SAUDI ARABIAN|SV\b/i.test(text)) newData.airline = 'Saudia';
+    else if (/QATAR|QR\b/i.test(text)) newData.airline = 'Qatar Airways';
+    else if (/GULF AIR|GF\b/i.test(text)) newData.airline = 'Gulf Air';
+    else if (/KUWAIT|KU\b/i.test(text)) newData.airline = 'Kuwait Airways';
+    else if (/JAZEERA|J9\b/i.test(text)) newData.airline = 'Jazeera Airways';
+    else if (/SALAMAIR|OV\b/i.test(text)) newData.airline = 'SalamAir';
+    else if (/MALAYSIA AIRLINES|MH\b/i.test(text)) newData.airline = 'Malaysia Airlines';
+    else if (/SINGAPORE AIRLINES|SQ\b/i.test(text)) newData.airline = 'Singapore Airlines';
+    else if (/THAI AIRWAYS|TG\b/i.test(text)) newData.airline = 'Thai Airways';
+    else if (/INDIGO|6E\b/i.test(text)) newData.airline = 'IndiGo';
+
+    // 5. Total & Fares
+    const totalMatch = 
+      text.match(/TOTAL\s*:\s*BDT\s*([\d,]+)/i) || 
+      text.match(/TOTAL\s*BDT\s*([\d,]+)/i) ||
+      text.match(/TOTAL FARE\s*:?\s*BDT?\s*([\d,]+)/i) ||
+      text.match(/GRAND TOTAL\s*:?\s*BDT?\s*([\d,]+)/i);
+
     if (totalMatch) {
-      const total = parseInt(totalMatch[1]);
+      const total = parseInt(totalMatch[1].replace(/,/g, ''));
       newData.base_fare = Math.round(total * 0.85);
       newData.total_fare_input = total;
     }
 
-    const utMatch = text.match(/UT\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*UT/i);
-    if (utMatch) newData.ut = parseInt(utMatch[1]);
+    // 6. Tax Breakdown
+    const utMatch = text.match(/UT\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*UT/i);
+    if (utMatch) newData.ut = parseInt(utMatch[1].replace(/,/g, ''));
 
-    const bdMatch = text.match(/BD\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*BD/i);
-    if (bdMatch) newData.bd = parseInt(bdMatch[1]);
+    const bdMatch = text.match(/BD\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*BD/i);
+    if (bdMatch) newData.bd = parseInt(bdMatch[1].replace(/,/g, ''));
 
-    const e5Match = text.match(/E5\s*:?\s*(\d+)/i) || text.match(/(\d+)\s*E5/i);
-    if (e5Match) newData.e5 = parseInt(e5Match[1]);
+    const e5Match = text.match(/E5\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*E5/i);
+    if (e5Match) newData.e5 = parseInt(e5Match[1].replace(/,/g, ''));
+
+    // Validation check: ensure we extracted at least passenger name, PNR, or ticket number
+    if (!newData.passenger_name && !newData.pnr && !newData.ticket_number && !newData.total_fare_input) {
+      setImportError('Could not detect passenger name or PNR in the pasted text. Please paste the ticket itinerary / booking confirmation containing passenger name and PNR.');
+      return;
+    }
 
     setForms([newData]);
     setFareDatas([getFareData(newData)]);
@@ -312,20 +373,29 @@ export function IndividualTicketPage() {
     setShowImportModal(false);
     setGdsText('');
     setShowForm(true);
-    setSuccess('Data parsed from GDS successfully! Please verify fields.');
+    setSuccess('Data parsed from GDS successfully! Please verify extracted fields.');
   };
   
   const parseWithAI = async () => {
+    setImportError('');
+    const text = gdsText.trim();
+    if (!text) {
+      setImportError('Please paste ticket text before parsing.');
+      return;
+    }
+
     setIsAiParsing(true);
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) throw new Error("Google AI Studio API key not found in .env (VITE_GEMINI_API_KEY)");
+      if (!apiKey) {
+        throw new Error("Google AI API Key (VITE_GEMINI_API_KEY) not found in configuration.");
+      }
 
       const prompt = `Parse the following flight GDS/ticket text and extract an array of passengers.
 For each passenger, return a JSON object with these exact keys:
 - passenger_name (string)
 - ticket_number (string, digits only, no spaces or hyphens)
-- pnr (string, exactly 6 chars)
+- pnr (string, 6 alphanumeric characters)
 - airline (string)
 - origin (string, 3-letter IATA code)
 - destination (string, 3-letter IATA code)
@@ -335,29 +405,80 @@ For each passenger, return a JSON object with these exact keys:
 - ut_tax (number, optional)
 - bd_tax (number, optional)
 - e5_tax (number, optional)
-- extra_info (array of objects {key: string, value: string} for things like baggage, meal, seat, visa)
+- extra_info (array of objects {key: string, value: string} for baggage, meal, seat, etc.)
 
 Text to parse:
-${gdsText}
+${text}
 
-Return ONLY a valid JSON array of objects. Do not include markdown code block syntax.`;
+Return ONLY a valid JSON array of objects. Do not include markdown formatting or commentary.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
-      
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message || "Failed to parse with AI");
-      
-      let aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-      aiResponse = aiResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-      
-      const parsedPassengers = JSON.parse(aiResponse);
-      
+      const candidateModels = [
+        'gemini-2.0-flash',
+        'gemini-2.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash'
+      ];
+
+      let aiResponseText = '';
+      let fetchSuccess = false;
+      let lastErrorMessage = '';
+
+      for (const model of candidateModels) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }]
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (textContent) {
+              aiResponseText = textContent;
+              fetchSuccess = true;
+              break;
+            }
+          } else {
+            const errData = await res.json();
+            lastErrorMessage = errData.error?.message || `Model ${model} returned HTTP ${res.status}`;
+          }
+        } catch (e: any) {
+          lastErrorMessage = e.message || `Failed to call ${model}`;
+        }
+      }
+
+      if (!fetchSuccess) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }]
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (textContent) {
+              aiResponseText = textContent;
+              fetchSuccess = true;
+            }
+          }
+        } catch (e: any) {
+          // ignore fallback error
+        }
+      }
+
+      if (!fetchSuccess || !aiResponseText) {
+        throw new Error(lastErrorMessage || "Failed to parse ticket with AI models.");
+      }
+
+      let cleanedText = aiResponseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsedPassengers = JSON.parse(cleanedText);
+
       if (Array.isArray(parsedPassengers) && parsedPassengers.length > 0) {
         const newForms = parsedPassengers.map(p => ({
           ...emptyForm,
@@ -375,22 +496,25 @@ Return ONLY a valid JSON array of objects. Do not include markdown code block sy
           e5: p.e5_tax || 0,
           metadata: p.extra_info || []
         }));
-        
+
         setForms(newForms);
         setFareDatas(newForms.map(f => getFareData(f)));
         setNeedsRecalc(newForms.map(() => false));
         setActiveTab(0);
-        
+
         setShowImportModal(false);
         setGdsText('');
         setShowForm(true);
         setSuccess(`AI Parsed successfully! Extracted ${newForms.length} passenger(s).`);
       } else {
-         throw new Error("Invalid response format from AI");
+        throw new Error("AI returned empty or invalid passenger data.");
       }
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'AI parsing failed');
+    } catch (err: any) {
+      console.error('AI Parsing error:', err);
+      setImportError(`AI Parse Note: ${err.message || 'Failed to parse text.'} Falling back to Standard Parse...`);
+      setTimeout(() => {
+        parseGDS();
+      }, 1200);
     } finally {
       setIsAiParsing(false);
     }
@@ -764,24 +888,32 @@ Return ONLY a valid JSON array of objects. Do not include markdown code block sy
       </Modal>
 
       {/* GDS Import Modal */}
-      <Modal isOpen={showImportModal} onClose={() => setShowImportModal(false)} title="Import Ticket from GDS (Amadeus/Sabre/Galileo)">
+      <Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportError(''); }} title="Import Ticket from GDS (Amadeus/Sabre/Galileo)">
         <div className="p-5 space-y-4">
           <div className="p-4 bg-primary-50 rounded-lg border border-primary-100">
             <p className="text-sm text-primary-800 leading-relaxed">
               <strong>How to use:</strong> Open your GDS PDF, select all text (Ctrl+A), copy it (Ctrl+C), and paste it into the box below. The system will automatically extract passenger, flight, and fare details. You can use standard parsing or AI parsing.
             </p>
           </div>
+
+          {importError && (
+            <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-medium animate-shake">
+              <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-relaxed">{importError}</div>
+            </div>
+          )}
+
           <div>
             <label className="label">Paste GDS Report Text *</label>
             <textarea 
               className="input-field min-h-[200px] font-mono text-xs leading-normal" 
               placeholder="NAME: RAHMAN/SAYEDUR... TICKET: 779..."
               value={gdsText}
-              onChange={e => setGdsText(e.target.value)}
+              onChange={e => { setGdsText(e.target.value); setImportError(''); }}
             />
           </div>
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setShowImportModal(false)} className="btn-ghost flex-1">Cancel</button>
+            <button onClick={() => { setShowImportModal(false); setImportError(''); }} className="btn-ghost flex-1">Cancel</button>
             <button 
               onClick={parseGDS} 
               disabled={!gdsText.trim() || isAiParsing} 
