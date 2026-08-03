@@ -41,27 +41,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Safety fallback timer: Ensure loading spinner turns off after 2.5 seconds max
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }, 2500);
+
     const initializeAuth = async () => {
       try {
-        const currentSession = await account.getSession('current');
+        // Race session checks against a 2-second timeout to prevent hanging on slow/blocked connections
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Auth check timeout')), 2000)
+        );
+
+        const currentSession = (await Promise.race([
+          account.getSession('current'),
+          timeout,
+        ])) as Models.Session;
+
+        if (!isMounted) return;
         setSession(currentSession);
-        const currentUser = await account.get();
+
+        const currentUser = (await Promise.race([
+          account.get(),
+          timeout,
+        ])) as Models.User<Models.Preferences>;
+
+        if (!isMounted) return;
         setUser(currentUser);
-        
+
         if (currentUser) {
           await fetchProfile(currentUser.$id);
         }
       } catch (error) {
-        // Not logged in or session expired
-        console.log('No active session found.');
-        setSession(null);
-        setUser(null);
+        // Not logged in or session expired or timeout
+        console.log('No active session found or request timed out.');
+        if (isMounted) {
+          setSession(null);
+          setUser(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          clearTimeout(timer);
+        }
       }
     };
 
     initializeAuth();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
