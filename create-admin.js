@@ -6,6 +6,8 @@ const endpoint = "https://sgp.cloud.appwrite.io/v1";
 const projectId = "6a4913e0003115e46052";
 const databaseId = "6a4918ff00301840c22b";
 
+
+
 const client = new Client()
   .setEndpoint(endpoint)
   .setProject(projectId)
@@ -36,31 +38,31 @@ async function createAdmin() {
       console.log(`✅ User created successfully! ID: ${user.$id}`);
       userId = user.$id;
     }
-    
+
     // Check if profile exists
     try {
-        await databases.getDocument(databaseId, 'profiles', userId);
-        console.log(`✅ Profile already exists for this user.`);
+      await databases.getDocument(databaseId, 'profiles', userId);
+      console.log(`✅ Profile already exists for this user.`);
     } catch (err) {
-        if (err.code === 404) {
-            console.log(`Creating profile document for ${email}...`);
-            await databases.createDocument(databaseId, 'profiles', userId, {
-                full_name: fullName,
-                role: 'super_admin',
-                phone: '01XXXXXXXXX',
-                is_active: true,
-                created_at: new Date().toISOString()
-            });
-            console.log(`✅ Profile document created successfully!`);
-        } else {
-            console.error("Error checking profile:", err.message);
-        }
+      if (err.code === 404) {
+        console.log(`Creating profile document for ${email}...`);
+        await databases.createDocument(databaseId, 'profiles', userId, {
+          full_name: fullName,
+          role: 'super_admin',
+          phone: '01XXXXXXXXX',
+          is_active: true,
+          created_at: new Date().toISOString()
+        });
+        console.log(`✅ Profile document created successfully!`);
+      } else {
+        console.error("Error checking profile:", err.message);
+      }
     }
-    
+
     console.log(`\n🎉 Success! You can now log in with:`);
     console.log(`Email: ${email}`);
     console.log(`Password: ${password}`);
-    
+
   } catch (error) {
     console.error("❌ Error creating/updating user:", error.message);
     if (error.message.includes("paused due to inactivity")) {
