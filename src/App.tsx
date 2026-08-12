@@ -18,6 +18,8 @@ import { HajjPilgrimsPage } from './pages/hajj/HajjPilgrimsPage';
 import { HajjLogisticsPage } from './pages/hajj/HajjLogisticsPage';
 import { ToursPage } from './pages/tours/ToursPage';
 import { TourBookingsPage } from './pages/tours/TourBookingsPage';
+import { HotelBookingsPage } from './pages/hotels/HotelBookingsPage';
+import { HotelDirectoryPage } from './pages/hotels/HotelDirectoryPage';
 import { CustomersPage } from './pages/crm/CustomersPage';
 import { LeadsPage } from './pages/crm/LeadsPage';
 import { SMSCampaignPage } from './pages/crm/SMSCampaignPage';
@@ -51,6 +53,8 @@ const moduleTitles: Record<ActiveModule, { title: string; subtitle?: string }> =
   'tickets-suppliers': { title: 'Ticket Suppliers', subtitle: 'Agencies we purchase from' },
   'tickets-report': { title: 'Ticket Reports', subtitle: 'Revenue and sales analytics' },
   'tickets-setup': { title: 'Flight Master Setup', subtitle: 'Manage airlines and destinations' },
+  'hotels-bookings': { title: 'Hotel Bookings', subtitle: 'Hotel reservation & voucher management' },
+  'hotels-directory': { title: 'Hotel Directory & Info', subtitle: 'Partner hotel directory & room rates' },
   'umrah-packages': { title: 'Umrah Packages', subtitle: 'Package management' },
   'umrah-groups': { title: 'Umrah Groups', subtitle: 'Group travel management' },
   'umrah-pilgrims': { title: 'Umrah Pilgrims', subtitle: 'Pilgrim registration & tracking' },
@@ -115,6 +119,8 @@ function AppContent() {
       case 'tickets-suppliers': return <SuppliersPage />;
       case 'tickets-report': return <TicketReportsPage />;
       case 'tickets-setup': return <FlightSetupPage />;
+      case 'hotels-bookings': return <HotelBookingsPage />;
+      case 'hotels-directory': return <HotelDirectoryPage />;
       case 'umrah-packages': return <UmrahPackagesPage />;
       case 'umrah-groups': return <UmrahGroupsPage />;
       case 'umrah-pilgrims': return <UmrahPilgrimsPage />;

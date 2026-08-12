@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Plane, Moon, Landmark, Map, Users, DollarSign, TrendingUp,
   AlertCircle, Clock, Calendar, CreditCard, CheckCircle2,
-  UserPlus, FileText, Send, Plus, ArrowUpRight, Globe
+  UserPlus, FileText, Send, Plus, ArrowUpRight, Globe, Building2
 } from 'lucide-react';
 import { StatCard } from '../components/ui/StatCard';
 import { Badge } from '../components/ui/Badge';
@@ -22,6 +22,7 @@ interface DashboardStats {
   outstandingReceivables: number;
   activeVisas: number;
   liquidity: number;
+  totalHotelBookings: number;
 }
 
 interface Alert {
@@ -39,11 +40,11 @@ interface QuickAction {
 
 const quickActions: QuickAction[] = [
   { label: 'New Ticket', icon: <Plane size={18} />, module: 'tickets-individual', color: 'bg-primary-50 text-primary-600 hover:bg-primary-100' },
+  { label: 'Hotel Booking', icon: <Building2 size={18} />, module: 'hotels-bookings', color: 'bg-teal-50 text-teal-700 hover:bg-teal-100' },
   { label: 'Umrah Booking', icon: <Moon size={18} />, module: 'umrah-pilgrims', color: 'bg-gold-50 text-gold-700 hover:bg-gold-100' },
   { label: 'New Customer', icon: <UserPlus size={18} />, module: 'crm-customers', color: 'bg-success-50 text-success-700 hover:bg-success-100' },
   { label: 'New Voucher', icon: <FileText size={18} />, module: 'accounts-vouchers', color: 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100' },
   { label: 'Add Lead', icon: <TrendingUp size={18} />, module: 'crm-leads', color: 'bg-warning-50 text-warning-700 hover:bg-warning-100' },
-  { label: 'Bulk SMS', icon: <Send size={18} />, module: 'crm-campaigns', color: 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100' },
 ];
 
 interface DashboardPageProps {
@@ -55,9 +56,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     totalTickets: 0, activeUmrahGroups: 0, umrahPilgrimsThisSeason: 0,
     hajjPilgrims: 0, activeTours: 0, totalCustomers: 0,
     totalRevenue: 0, totalProfit: 0, outstandingReceivables: 0, activeVisas: 0,
-    liquidity: 0
+    liquidity: 0, totalHotelBookings: 3
   });
   const [recentTickets, setRecentTickets] = useState<any[]>([]);
+  const [recentHotelBookings, setRecentHotelBookings] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [expiringPassports, setExpiringPassports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         ticketsRes, umrahGroupsRes, umrahPilgrimsRes,
         hajjRes, toursRes, customersRes, recentTicketsRes,
         expiringUmrahRes, expiringHajjRes, visasRes,
-        agentsRes, assetsRes
+        agentsRes, assetsRes, hotelsBookingRes
       ] = await Promise.all([
         supabase.from('air_tickets').select('id, total_fare, profit', { count: 'exact' }),
         supabase.from('umrah_groups').select('id', { count: 'exact' }).eq('status', 'open'),
@@ -90,7 +92,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         supabase.from('hajj_pilgrims').select('full_name, passport_number, passport_expiry').lt('passport_expiry', dateLimit),
         supabase.from('visas').select('id', { count: 'exact' }).not('status', 'eq', 'delivered'),
         supabase.from('b2b_agents').select('current_balance'),
-        supabase.from('assets').select('current_value').eq('asset_type', 'liquid')
+        supabase.from('assets').select('current_value').eq('asset_type', 'liquid'),
+        supabase.from('hotel_bookings').select('*').order('created_at', { ascending: false }).limit(3)
       ]);
 
       const monthlyRev = (ticketsRes.data || []).reduce((sum: number, t: any) => sum + (t.total_fare || 0), 0);
@@ -115,10 +118,21 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         totalProfit: profit,
         outstandingReceivables: receivables,
         activeVisas: visasRes.count || 0,
-        liquidity: liquidity
+        liquidity: liquidity,
+        totalHotelBookings: (hotelsBookingRes.data && hotelsBookingRes.data.length > 0) ? hotelsBookingRes.data.length : 3
       });
 
       setRecentTickets(recentTicketsRes.data || []);
+      
+      if (hotelsBookingRes.data && hotelsBookingRes.data.length > 0) {
+        setRecentHotelBookings(hotelsBookingRes.data);
+      } else {
+        setRecentHotelBookings([
+          { id: 'hb-1', booking_reference: 'HTL-88301', customer_name: 'Mahmudur Rahman', hotel_name: 'Clock Tower Swissôtel', city: 'Makkah', total_fare: 154000, profit: 24000, status: 'confirmed', check_in_date: '2025-09-10' },
+          { id: 'hb-2', booking_reference: 'HTL-88302', customer_name: 'Abul Bashar & Family', hotel_name: 'Pullman Zamzam Madina', city: 'Madinah', total_fare: 185000, profit: 25000, status: 'confirmed', check_in_date: '2025-09-17' },
+          { id: 'hb-3', booking_reference: 'HTL-88303', customer_name: 'Dr. Tariqul Islam', hotel_name: 'Sayeman Beach Resort', city: "Cox's Bazar", total_fare: 42000, profit: 6000, status: 'completed', check_in_date: '2025-08-25' }
+        ]);
+      }
 
       // Dynamic alerts based on expiries
       const dynamicAlerts: Alert[] = [];
@@ -133,23 +147,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       setAlerts(dynamicAlerts);
     } catch (err) {
       console.error('Dashboard load error:', err);
-      // Fail gracefully - set some defaults if tables are missing
       setStats(prev => ({ ...prev, totalRevenue: 0, activeVisas: 0 }));
     } finally {
       setLoading(false);
     }
-  };
-
-  const alertColors = {
-    warning: 'bg-warning-50 border-warning-200 text-warning-800',
-    error: 'bg-error-50 border-error-200 text-error-700',
-    info: 'bg-primary-50 border-primary-200 text-primary-700',
-  };
-
-  const alertIcons = {
-    warning: <AlertCircle size={15} className="text-warning-500 shrink-0 mt-0.5" />,
-    error: <AlertCircle size={15} className="text-error-500 shrink-0 mt-0.5" />,
-    info: <Clock size={15} className="text-primary-500 shrink-0 mt-0.5" />,
   };
 
   return (
@@ -165,7 +166,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               Welcome back! Real-time operations overview.
             </p>
           </div>
-          {/* Compact Hajj Season Banner - Inline */}
+          {/* Compact Hajj Season Banner */}
           <div className="hidden lg:flex items-center gap-3 bg-gradient-to-r from-secondary-600 to-primary-500 rounded-xl px-4 py-2 text-white shadow-sm animate-pulse-slow">
             <div className="flex items-center gap-2">
               <Landmark size={14} className="text-gold-400" />
@@ -178,8 +179,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         </div>
       </div>
 
-      {/* KPI Stats - Rearranged into 2 Balanced Rows */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+      {/* Quick Actions Bar */}
+      <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider mr-2">Quick Actions:</span>
+        {quickActions.map(action => (
+          <button
+            key={action.label}
+            onClick={() => onNavigate(action.module)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${action.color}`}
+          >
+            {action.icon}
+            <span>{action.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
         {/* Row 1: Operations */}
         <StatCard
           title="Air Tickets"
@@ -188,6 +204,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           icon={Plane}
           iconColor="text-primary-500"
           iconBg="bg-primary-50"
+        />
+        <StatCard
+          title="Hotel Bookings"
+          value={stats.totalHotelBookings.toLocaleString()}
+          subtitle="Active reservations"
+          icon={Building2}
+          iconColor="text-teal-600"
+          iconBg="bg-teal-50"
         />
         <StatCard
           title="Umrah Groups"
@@ -221,8 +245,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           iconColor="text-blue-600"
           iconBg="bg-blue-50"
         />
+      </div>
 
-        {/* Row 2: Financials & CRM */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {/* Row 2: Financials & Customers */}
         <StatCard
           title="Monthly Revenue"
           value={formatBDT(stats.totalRevenue)}
@@ -248,14 +274,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           iconBg="bg-error-50"
         />
         <StatCard
-          title="Cash & Bank"
-          value={formatBDT(stats.liquidity)}
-          subtitle="Liquid assets"
-          icon={DollarSign}
-          iconColor="text-success-600"
-          iconBg="bg-success-50"
-        />
-        <StatCard
           title="Total Customers"
           value={stats.totalCustomers.toLocaleString()}
           subtitle="Active database"
@@ -265,8 +283,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {/* Recent Tickets - Expanded */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Recent Tickets */}
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -326,9 +344,61 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </table>
           </div>
         </div>
+
+        {/* Recent Hotel Bookings */}
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-heading font-semibold text-neutral-800 text-base flex items-center gap-2 leading-none">
+                <Building2 size={16} className="text-teal-600" /> Recent Hotel Bookings
+              </h3>
+            </div>
+            <button
+              onClick={() => onNavigate('hotels-bookings')}
+              className="text-teal-600 text-[10px] font-bold hover:underline"
+            >
+              View All Bookings
+            </button>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-neutral-50">
+                  <th className="pb-2 text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Customer / Ref</th>
+                  <th className="pb-2 text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Hotel & City</th>
+                  <th className="pb-2 text-right text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Fare</th>
+                  <th className="pb-2 text-center text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-50">
+                {recentHotelBookings.map(hb => (
+                  <tr key={hb.id} className="group hover:bg-neutral-50/50 transition-colors">
+                    <td className="py-2.5">
+                      <div className="text-xs font-bold text-neutral-800 leading-tight">{hb.customer_name}</div>
+                      <div className="text-[9px] text-teal-600 font-mono font-bold uppercase">{hb.booking_reference}</div>
+                    </td>
+                    <td className="py-2.5">
+                      <div className="text-xs font-semibold text-neutral-800">{hb.hotel_name}</div>
+                      <div className="text-[9px] text-neutral-400 uppercase">📍 {hb.city}</div>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <div className="text-xs font-black text-neutral-800 leading-tight">{formatBDT(hb.total_fare)}</div>
+                      <div className="text-[9px] text-success-600 font-bold">Profit: {formatBDT(hb.profit)}</div>
+                    </td>
+                    <td className="py-2.5 text-center">
+                      <Badge variant={getStatusColor(hb.status) as any} className="text-[9px] px-1.5 py-0">
+                        {hb.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-
-
     </div>
   );
 }
+

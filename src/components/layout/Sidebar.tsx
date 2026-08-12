@@ -10,6 +10,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 export type ActiveModule =
   | 'dashboard' | 'mobile-dashboard'
   | 'tickets-individual' | 'tickets-b2b' | 'tickets-report' | 'tickets-setup' | 'tickets-suppliers'
+  | 'hotels-bookings' | 'hotels-directory'
   | 'umrah-packages' | 'umrah-groups' | 'umrah-pilgrims'
   | 'hajj-packages' | 'hajj-pilgrims' | 'hajj-logistics'
   | 'tours-domestic' | 'tours-international' | 'tours-bookings'
@@ -47,6 +48,17 @@ const navGroups: NavGroup[] = [
       { id: 'hajj-pilgrims', label: 'Hajj Pilgrims' },
       { id: 'hajj-logistics', label: 'Hajj Logistics' },
       { id: 'tours-bookings', label: 'Tour Bookings' },
+    ],
+    roles: ['super_admin', 'admin', 'sales_agent', 'tour_manager'],
+  },
+  {
+    id: 'hotel-ops',
+    label: 'Hotels & Accommodation',
+    icon: <Building2 size={18} />,
+    items: [
+      { id: 'hotels-bookings', label: 'Hotel Bookings' },
+      { id: 'hotels-directory', label: 'Hotel Directory & Info' },
+      { id: 'crm-customers', label: 'Customer Information' },
     ],
     roles: ['super_admin', 'admin', 'sales_agent', 'tour_manager'],
   },
@@ -124,7 +136,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
   const { company } = useSettings();
   const [logoError, setLogoError] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    'sales-ops': true, 'accounts-finance': false, 'crm-marketing': false, 'hr-admin': false, 'my-account': false,
+    'sales-ops': true, 'hotel-ops': true, 'accounts-finance': false, 'crm-marketing': false, 'hr-admin': false, 'my-account': false,
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -209,6 +221,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           // Module specific colors
           const groupColors: Record<string, string> = {
             'sales-ops': 'text-blue-400',
+            'hotel-ops': 'text-teal-400',
             'accounts-finance': 'text-emerald-400',
             'crm-marketing': 'text-amber-400',
             'hr-admin': 'text-purple-400',

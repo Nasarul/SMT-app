@@ -1,0 +1,624 @@
+import React, { useState, useEffect } from 'react';
+import { Building2, Plus, Search, MapPin, Phone, Mail, Star, Edit2, Trash2, CheckCircle, AlertCircle, Wifi, Coffee, Bus, Sparkles, ScrollText, AlertTriangle } from 'lucide-react';
+import { Modal } from '../../components/ui/Modal';
+import { Badge } from '../../components/ui/Badge';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { formatBDT } from '../../lib/constants';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+
+export interface Hotel {
+  id: string;
+  hotel_name: string;
+  city: string;
+  country: string;
+  star_rating: number;
+  address: string;
+  contact_person: string;
+  contact_phone: string;
+  contact_email: string;
+  distance_to_landmark: string;
+  amenities: string[];
+  standard_rate_bdt: number;
+  hotel_rules?: string;
+  cancellation_policy?: string;
+  created_at?: string;
+}
+
+export const initialHotels: Hotel[] = [
+  {
+    id: 'h-1',
+    hotel_name: 'Clock Tower Swissôtel',
+    city: 'Makkah',
+    country: 'Saudi Arabia',
+    star_rating: 5,
+    address: 'Abraj Al Bait Complex, King Abdul Aziz Endowment, Makkah',
+    contact_person: 'Sheikh Ibrahim',
+    contact_phone: '+966 12 571 8000',
+    contact_email: 'reservations.makkah@swissotel.com',
+    distance_to_landmark: '50m from Haram (Abraj Al Bait)',
+    amenities: ['Free WiFi', 'Breakfast Included', 'Elevator', 'Air Conditioning', 'Haram View', '24/7 Room Service'],
+    standard_rate_bdt: 22000,
+    hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Original Passport / NID required at check-in. Non-smoking room.',
+    cancellation_policy: 'Free cancellation up to 72 hours before check-in. 1 night fee applies afterwards for late cancellation or no-show.',
+  },
+  {
+    id: 'h-2',
+    hotel_name: 'Pullman Zamzam Madina',
+    city: 'Madinah',
+    country: 'Saudi Arabia',
+    star_rating: 5,
+    address: 'Amr Bin Al Aas Street, Central Area, Madinah',
+    contact_person: 'Tariq Al-Mansoor',
+    contact_phone: '+966 14 821 0500',
+    contact_email: 'pullman.madinah@accor.com',
+    distance_to_landmark: '150m from Masjid Nabawi',
+    amenities: ['Free WiFi', 'Breakfast Included', 'Shuttle Service', 'Restaurant', 'Air Conditioning'],
+    standard_rate_bdt: 18500,
+    hotel_rules: 'Check-in: 15:00 | Check-out: 12:00. Original Passport required upon arrival.',
+    cancellation_policy: 'Free cancellation up to 7 days before stay. 50% penalty for late cancellation.',
+  },
+  {
+    id: 'h-3',
+    hotel_name: 'Le Méridien Towers Makkah',
+    city: 'Makkah',
+    country: 'Saudi Arabia',
+    star_rating: 4,
+    address: 'Kudai Road, Makkah',
+    contact_person: 'Faisal Al-Otaibi',
+    contact_phone: '+966 12 539 9999',
+    contact_email: 'info.lemeridienmakkah@marriott.com',
+    distance_to_landmark: '800m (24/7 Shuttle to Haram)',
+    amenities: ['Free WiFi', 'Free Shuttle to Haram', 'Breakfast Included', 'Restaurant'],
+    standard_rate_bdt: 12500,
+    hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Shuttle service operates 24/7.',
+    cancellation_policy: 'Free cancellation up to 48 hours prior to check-in.',
+  },
+  {
+    id: 'h-4',
+    hotel_name: 'Sayeman Beach Resort',
+    city: "Cox's Bazar",
+    country: 'Bangladesh',
+    star_rating: 5,
+    address: 'Marine Drive Road, Kolatoli, Cox\'s Bazar',
+    contact_person: 'Rahim Chowdhury',
+    contact_phone: '+880 1755-691917',
+    contact_email: 'reservation@sayemanresort.com',
+    distance_to_landmark: 'Beachfront (Direct Access)',
+    amenities: ['Infinity Pool', 'Free WiFi', 'Sea View', 'Breakfast Included', 'Spa'],
+    standard_rate_bdt: 14000,
+    hotel_rules: 'Check-in: 13:00 | Check-out: 11:00. NID / Passport copy required.',
+    cancellation_policy: 'Non-refundable promo rate. Rescheduling subject to availability.',
+  },
+  {
+    id: 'h-5',
+    hotel_name: 'The Westin Dhaka',
+    city: 'Dhaka',
+    country: 'Bangladesh',
+    star_rating: 5,
+    address: 'Main Gulshan Avenue, Plot-01, Road 45, Gulshan-2, Dhaka',
+    contact_person: 'Anisur Rahman',
+    contact_phone: '+880 2-9891988',
+    contact_email: 'reservations.dhaka@westin.com',
+    distance_to_landmark: 'Central Gulshan-2',
+    amenities: ['Free WiFi', 'Swimming Pool', 'Gym', 'Multiple Restaurants', 'Airport Shuttle'],
+    standard_rate_bdt: 19500,
+    hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Government ID card required.',
+    cancellation_policy: 'Free cancellation until 18:00 on arrival day.',
+  }
+];
+
+const emptyHotelForm = {
+  hotel_name: '',
+  city: 'Makkah',
+  country: 'Saudi Arabia',
+  star_rating: 4,
+  address: '',
+  contact_person: '',
+  contact_phone: '',
+  contact_email: '',
+  distance_to_landmark: '',
+  amenities_str: 'Free WiFi, Breakfast Included, Air Conditioning',
+  standard_rate_bdt: 10000,
+  hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Original Passport / NID required at check-in. Non-smoking room.',
+  cancellation_policy: 'Free cancellation up to 72 hours before check-in. 1 night fee applies afterwards.',
+};
+
+export function HotelDirectoryPage() {
+  const { profile } = useAuth();
+  const [hotels, setHotels] = useState<Hotel[]>(initialHotels);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [starFilter, setStarFilter] = useState<string>('');
+  
+  const [showForm, setShowForm] = useState(false);
+  const [editingHotel, setEditingHotel] = useState<Hotel | null>(null);
+  const [form, setForm] = useState(emptyHotelForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    loadHotels();
+  }, []);
+
+  const loadHotels = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from('hotels').select('*').order('hotel_name', { ascending: true });
+      if (data && data.length > 0) {
+        setHotels(data.map((item: any) => ({
+          ...item,
+          amenities: Array.isArray(item.amenities) 
+            ? item.amenities 
+            : typeof item.amenities === 'string' 
+              ? item.amenities.split(',').map((s: string) => s.trim()) 
+              : []
+        })));
+      } else {
+        setHotels(initialHotels);
+      }
+    } catch (e) {
+      console.error('Error fetching hotels:', e);
+      setHotels(initialHotels);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!form.hotel_name || !form.city) {
+      setError('Hotel Name and City are required.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    const amenitiesList = form.amenities_str
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const payload = {
+      hotel_name: form.hotel_name,
+      city: form.city,
+      country: form.country,
+      star_rating: Number(form.star_rating),
+      address: form.address,
+      contact_person: form.contact_person,
+      contact_phone: form.contact_phone,
+      contact_email: form.contact_email,
+      distance_to_landmark: form.distance_to_landmark,
+      amenities: amenitiesList,
+      standard_rate_bdt: Number(form.standard_rate_bdt) || 0,
+      hotel_rules: form.hotel_rules,
+      cancellation_policy: form.cancellation_policy,
+    };
+
+    try {
+      if (editingHotel) {
+        const { error: err } = await supabase
+          .from('hotels')
+          .update(payload)
+          .eq('id', editingHotel.id);
+        
+        if (err) {
+          setHotels(prev => prev.map(h => h.id === editingHotel.id ? { ...h, ...payload } : h));
+        } else {
+          loadHotels();
+        }
+        setSuccess('Hotel info updated successfully!');
+      } else {
+        const { error: err } = await supabase
+          .from('hotels')
+          .insert([payload]);
+
+        if (err) {
+          const newHotel: Hotel = {
+            id: 'h-' + Date.now(),
+            ...payload
+          };
+          setHotels(prev => [newHotel, ...prev]);
+        } else {
+          loadHotels();
+        }
+        setSuccess('New Hotel registered successfully!');
+      }
+
+      setShowForm(false);
+      setEditingHotel(null);
+      setForm(emptyHotelForm);
+    } catch (err: any) {
+      setError(err.message || 'Failed to save hotel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEdit = (hotel: Hotel) => {
+    setEditingHotel(hotel);
+    setForm({
+      hotel_name: hotel.hotel_name || '',
+      city: hotel.city || 'Makkah',
+      country: hotel.country || 'Saudi Arabia',
+      star_rating: hotel.star_rating || 4,
+      address: hotel.address || '',
+      contact_person: hotel.contact_person || '',
+      contact_phone: hotel.contact_phone || '',
+      contact_email: hotel.contact_email || '',
+      distance_to_landmark: hotel.distance_to_landmark || '',
+      amenities_str: hotel.amenities ? hotel.amenities.join(', ') : '',
+      standard_rate_bdt: hotel.standard_rate_bdt || 0,
+      hotel_rules: hotel.hotel_rules || '',
+      cancellation_policy: hotel.cancellation_policy || '',
+    });
+    setShowForm(true);
+    setError('');
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this hotel record?')) return;
+    try {
+      await supabase.from('hotels').delete().eq('id', id);
+    } catch (e) {
+      console.log('Using local deletion');
+    }
+    setHotels(prev => prev.filter(h => h.id !== id));
+    setSuccess('Hotel record removed.');
+  };
+
+  const f = (field: string, val: any) => setForm(prev => ({ ...prev, [field]: val }));
+
+  const filteredHotels = hotels.filter(h => {
+    const matchesSearch =
+      h.hotel_name.toLowerCase().includes(search.toLowerCase()) ||
+      h.city.toLowerCase().includes(search.toLowerCase()) ||
+      h.distance_to_landmark.toLowerCase().includes(search.toLowerCase());
+    
+    const matchesCity = !cityFilter || h.city.toLowerCase() === cityFilter.toLowerCase();
+    const matchesStar = !starFilter || h.star_rating === Number(starFilter);
+
+    return matchesSearch && matchesCity && matchesStar;
+  });
+
+  const cities = Array.from(new Set(hotels.map(h => h.city)));
+
+  return (
+    <div className="p-4 lg:p-6 animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h2 className="page-title flex items-center gap-2">
+            <Building2 className="text-primary-600" size={24} /> Hotel Directory & Information
+          </h2>
+          <p className="text-sm text-neutral-500">Manage partner hotel directory, star category, landmarks, rules & policies</p>
+        </div>
+        <button
+          onClick={() => { setEditingHotel(null); setForm(emptyHotelForm); setShowForm(true); setError(''); }}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus size={16} /> Add New Hotel
+        </button>
+      </div>
+
+      {success && (
+        <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 text-success-700 rounded-lg mb-4 text-sm">
+          <CheckCircle size={15} /> {success}
+        </div>
+      )}
+
+      {/* Filter Bar */}
+      <div className="card p-4 mb-6 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+          <input
+            className="input-field pl-9"
+            placeholder="Search hotel name, city, or landmark distance..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <select className="input-field sm:w-44" value={cityFilter} onChange={e => setCityFilter(e.target.value)}>
+          <option value="">All Cities</option>
+          {cities.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="input-field sm:w-40" value={starFilter} onChange={e => setStarFilter(e.target.value)}>
+          <option value="">All Ratings</option>
+          <option value="5">5 Star ★★★★★</option>
+          <option value="4">4 Star ★★★★</option>
+          <option value="3">3 Star ★★★</option>
+        </select>
+      </div>
+
+      {/* Hotel Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredHotels.length === 0 && (
+          <div className="col-span-full">
+            <EmptyState
+              icon={Building2}
+              title="No Hotels Found"
+              description="Register new hotels to manage bookings and package rates."
+            />
+          </div>
+        )}
+
+        {filteredHotels.map(hotel => (
+          <div key={hotel.id} className="card p-5 hover:shadow-lg transition-all border border-neutral-100 flex flex-col justify-between group">
+            <div>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading font-bold text-neutral-800 text-base group-hover:text-primary-600 transition-colors">
+                      {hotel.hotel_name}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-neutral-500 mt-0.5">
+                    <MapPin size={13} className="text-primary-500 shrink-0" />
+                    <span className="font-semibold text-neutral-700">{hotel.city}</span>, {hotel.country}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-0.5 bg-gold-50 border border-gold-200 px-2 py-0.5 rounded-full">
+                  {Array.from({ length: hotel.star_rating }).map((_, i) => (
+                    <Star key={i} size={11} className="text-gold-500 fill-gold-500" />
+                  ))}
+                </div>
+              </div>
+
+              {hotel.distance_to_landmark && (
+                <div className="mt-2 text-xs bg-primary-50 text-primary-800 px-2.5 py-1 rounded-md inline-block font-medium border border-primary-100">
+                  📍 {hotel.distance_to_landmark}
+                </div>
+              )}
+
+              {hotel.address && (
+                <p className="text-xs text-neutral-500 mt-2 line-clamp-2 leading-relaxed">
+                  {hotel.address}
+                </p>
+              )}
+
+              {/* Contact Info */}
+              <div className="mt-3 pt-3 border-t border-neutral-100 space-y-1 text-xs">
+                {hotel.contact_person && (
+                  <div className="text-neutral-700 font-medium">
+                    Contact: <span className="text-neutral-900 font-bold">{hotel.contact_person}</span>
+                  </div>
+                )}
+                {hotel.contact_phone && (
+                  <div className="flex items-center gap-1.5 text-neutral-500">
+                    <Phone size={12} className="text-neutral-400" /> {hotel.contact_phone}
+                  </div>
+                )}
+                {hotel.contact_email && (
+                  <div className="flex items-center gap-1.5 text-neutral-500 truncate">
+                    <Mail size={12} className="text-neutral-400 shrink-0" /> {hotel.contact_email}
+                  </div>
+                )}
+              </div>
+
+              {/* Amenities */}
+              {hotel.amenities && hotel.amenities.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {hotel.amenities.slice(0, 4).map((amenity, idx) => (
+                    <span key={idx} className="text-[10px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded font-medium">
+                      {amenity}
+                    </span>
+                  ))}
+                  {hotel.amenities.length > 4 && (
+                    <span className="text-[10px] bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-bold">
+                      +{hotel.amenities.length - 4}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Rules & Cancellation preview */}
+              {(hotel.hotel_rules || hotel.cancellation_policy) && (
+                <div className="mt-3 pt-2 border-t border-dashed border-neutral-100 space-y-1 text-[11px]">
+                  {hotel.hotel_rules && (
+                    <div className="text-neutral-600 truncate" title={hotel.hotel_rules}>
+                      📜 <span className="font-semibold">Rules:</span> {hotel.hotel_rules}
+                    </div>
+                  )}
+                  {hotel.cancellation_policy && (
+                    <div className="text-rose-700 truncate" title={hotel.cancellation_policy}>
+                      ⚠️ <span className="font-semibold">Cancellation:</span> {hotel.cancellation_policy}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Avg Nightly Rate</span>
+                <div className="text-sm font-black text-neutral-900">
+                  {formatBDT(hotel.standard_rate_bdt)} <span className="text-[10px] font-normal text-neutral-400">/ night</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleEdit(hotel)}
+                  className="p-1.5 hover:bg-neutral-100 text-neutral-500 hover:text-primary-600 rounded-lg transition-colors"
+                  title="Edit Hotel"
+                >
+                  <Edit2 size={16} />
+                </button>
+                <button
+                  onClick={() => handleDelete(hotel.id)}
+                  className="p-1.5 hover:bg-error-50 text-neutral-400 hover:text-error-600 rounded-lg transition-colors"
+                  title="Delete Hotel"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add / Edit Hotel Modal */}
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingHotel ? 'Edit Hotel Info' : 'Add New Hotel'} size="lg">
+        <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
+          {error && (
+            <div className="flex gap-2 p-3 bg-error-50 border border-error-200 text-error-700 rounded-lg text-sm">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
+            </div>
+          )}
+
+          <div className="form-grid">
+            <div className="sm:col-span-2">
+              <label className="label">Hotel Name *</label>
+              <input
+                className="input-field font-semibold"
+                placeholder="e.g. Clock Tower Swissôtel"
+                value={form.hotel_name}
+                onChange={e => f('hotel_name', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="label">City *</label>
+              <input
+                className="input-field font-semibold"
+                placeholder="e.g. Makkah / Madinah / Dhaka"
+                value={form.city}
+                onChange={e => f('city', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="label">Country</label>
+              <input
+                className="input-field"
+                placeholder="e.g. Saudi Arabia / Bangladesh"
+                value={form.country}
+                onChange={e => f('country', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="label">Star Category</label>
+              <select className="input-field font-medium" value={form.star_rating} onChange={e => f('star_rating', Number(e.target.value))}>
+                <option value={5}>5 Star ★★★★★</option>
+                <option value={4}>4 Star ★★★★</option>
+                <option value={3}>3 Star ★★★</option>
+                <option value={2}>2 Star ★★</option>
+                <option value={1}>1 Star ★</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Standard Nightly Rate (BDT)</label>
+              <input
+                type="number"
+                className="input-field font-bold text-primary-600"
+                placeholder="15000"
+                value={form.standard_rate_bdt}
+                onChange={e => f('standard_rate_bdt', e.target.value)}
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="label">Distance to Haram / Landmark</label>
+              <input
+                className="input-field"
+                placeholder="e.g. 50m from Haram / 150m from Masjid Nabawi / Beachfront"
+                value={form.distance_to_landmark}
+                onChange={e => f('distance_to_landmark', e.target.value)}
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="label">Hotel Address</label>
+              <textarea
+                className="input-field text-xs"
+                rows={2}
+                placeholder="Full address of the hotel"
+                value={form.address}
+                onChange={e => f('address', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="label">Contact Person</label>
+              <input
+                className="input-field"
+                placeholder="Manager / Booking Agent Name"
+                value={form.contact_person}
+                onChange={e => f('contact_person', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="label">Contact Phone</label>
+              <input
+                className="input-field"
+                placeholder="+966 12 571 8000"
+                value={form.contact_phone}
+                onChange={e => f('contact_phone', e.target.value)}
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="label">Contact Email</label>
+              <input
+                type="email"
+                className="input-field"
+                placeholder="reservations@hotel.com"
+                value={form.contact_email}
+                onChange={e => f('contact_email', e.target.value)}
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="label">Amenities (Comma separated)</label>
+              <input
+                className="input-field"
+                placeholder="Free WiFi, Breakfast Included, Haram View, Air Conditioning"
+                value={form.amenities_str}
+                onChange={e => f('amenities_str', e.target.value)}
+              />
+            </div>
+
+            <div className="sm:col-span-2 border-t border-neutral-100 pt-3">
+              <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1">Hotel Rules & Cancellation Policy (Auto-filled on Booking)</h4>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="label font-bold text-neutral-700">Hotel Rules</label>
+              <textarea
+                className="input-field text-xs"
+                rows={2}
+                placeholder="e.g. Check-in: 14:00 | Check-out: 12:00. Passport required."
+                value={form.hotel_rules}
+                onChange={e => f('hotel_rules', e.target.value)}
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="label font-bold text-neutral-700">Cancellation Policy</label>
+              <textarea
+                className="input-field text-xs"
+                rows={2}
+                placeholder="e.g. Free cancellation up to 72 hours before check-in. 1 night penalty fee for late cancellation."
+                value={form.cancellation_policy}
+                onChange={e => f('cancellation_policy', e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setShowForm(false)} className="btn-ghost flex-1">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">
+              {saving && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {saving ? 'Saving...' : editingHotel ? 'Update Hotel' : 'Save Hotel'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
