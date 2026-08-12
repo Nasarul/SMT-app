@@ -38,12 +38,40 @@ interface Supplier {
 }
 
 const emptyForm = {
-  ticket_number: '', passenger_name: '', passport_number: '', airline: '', pnr: '',
-  origin: 'DAC', destination: '', travel_date: '', return_date: '',
-  cabin_class: 'economy', base_fare: 0, total_fare_input: 0, ut: 0, bd: 0, e5: 0, commission_rate: 7, tax_amount: 0, ait_amount: 0,
-  service_charge: 0, cost_fare: 0, status: 'issued',
+  ticket_category: 'international' as 'domestic' | 'international',
+  ticket_number: '',
+  passenger_name: '',
+  passport_number: '',
+  airline: '',
+  pnr: '',
+  origin: 'DAC',
+  destination: '',
+  travel_date: '',
+  return_date: '',
+  cabin_class: 'economy',
+  base_fare: 0,
+  total_fare_input: 0,
+  
+  // Tax fields breakdown (Domestic & International)
+  ut: 0,
+  bd: 0,
+  e5: 0,
+  ow: 0,
+  p7: 0,
+  p8: 0,
+  e7: 0,
+  g8: 0,
+  ts: 0,
+  custom_taxes: [] as { code: string; amount: number }[],
+
+  commission_rate: 7,
+  service_charge: 0,
+  status: 'issued',
   supplier_id: '',
-  metadata: [] as {key: string, value: string}[]
+  metadata: [
+    { key: 'Baggage', value: '30 KG' },
+    { key: 'Value', value: '' }
+  ] as { key: string; value: string }[]
 };
 
 export function IndividualTicketPage() {
@@ -108,21 +136,43 @@ export function IndividualTicketPage() {
   const getFareData = (fData: any) => {
     const base = Math.max(0, Number(fData.base_fare) || 0);
     const total_input = Math.max(0, Number(fData.total_fare_input) || 0);
-    const ut = Math.max(0, Number(fData.ut) || 0);
+    
     const bd = Math.max(0, Number(fData.bd) || 0);
     const e5 = Math.max(0, Number(fData.e5) || 0);
+    const ow = Math.max(0, Number(fData.ow) || 0);
+    const p7 = Math.max(0, Number(fData.p7) || 0);
+    const p8 = Math.max(0, Number(fData.p8) || 0);
+    const ut = Math.max(0, Number(fData.ut) || 0);
+    const e7 = Math.max(0, Number(fData.e7) || 0);
+    const g8 = Math.max(0, Number(fData.g8) || 0);
+    const ts = Math.max(0, Number(fData.ts) || 0);
+    const customTaxSum = (fData.custom_taxes || []).reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
+
+    const itemizedTaxSum = bd + e5 + ow + p7 + p8 + ut + e7 + g8 + ts + customTaxSum;
+
+    // Calculate total tax and calculated total fare
+    const tax_ait = total_input > 0 && total_input >= base ? (total_input - base) : itemizedTaxSum;
+    const calculated_total_fare = total_input > 0 ? total_input : (base + itemizedTaxSum);
+
     const comm_rate = Math.max(0, Number(fData.commission_rate) || 0);
     const svc = Math.max(0, Number(fData.service_charge) || 0);
 
-    const tax_ait = total_input - base;
-    const vat = (total_input - (ut + bd + e5)) * 0.03;
-    const commission = base * (comm_rate / 100);
-    const total_commission = total_input - (commission + tax_ait + vat);
-    const net_commission = total_commission - commission;
-    const total_client_fare = total_input + svc;
-    const net_profit = net_commission + svc;
+    // VAT 3% calculation on gross ticket margin / base fare
+    const vat = Math.round((calculated_total_fare - itemizedTaxSum) * 0.03);
+    const commission = Math.round(base * (comm_rate / 100));
+    const total_commission = commission;
+    const net_commission = Math.round(commission - (vat * 0.5));
+    const total_client_fare = calculated_total_fare + svc;
+    const net_profit = Math.round(commission + svc);
     
-    return { base, total_input, ut, bd, e5, comm_rate, svc, tax_ait, vat, commission, total_commission, net_commission, total_client_fare, net_profit };
+    return { 
+      base, 
+      total_input: calculated_total_fare, 
+      itemizedTaxSum,
+      bd, e5, ow, p7, p8, ut, e7, g8, ts,
+      comm_rate, svc, tax_ait, vat, commission, 
+      total_commission, net_commission, total_client_fare, net_profit 
+    };
   };
 
   const [fareDatas, setFareDatas] = useState<any[]>([getFareData(emptyForm)]);
@@ -161,6 +211,13 @@ export function IndividualTicketPage() {
     const payloads = forms.map((f, i) => {
       const fd = fareDatas[i];
       const cost_fare = fd.total_client_fare - fd.net_profit;
+      const combinedTaxes = {
+        category: f.ticket_category,
+        ut: f.ut, bd: f.bd, e5: f.e5, ow: f.ow, p7: f.p7, p8: f.p8, e7: f.e7, g8: f.g8, ts: f.ts,
+        custom_taxes: f.custom_taxes || [],
+        metadata: f.metadata || []
+      };
+
       return {
         ticket_number: f.ticket_number,
         passenger_name: f.passenger_name,
@@ -183,7 +240,7 @@ export function IndividualTicketPage() {
         supplier_id: f.supplier_id || null,
         ticket_type: 'individual',
         sales_agent_id: profile?.id,
-        metadata: JSON.stringify(f.metadata || [])
+        metadata: JSON.stringify(combinedTaxes)
       };
     });
 
@@ -209,7 +266,7 @@ export function IndividualTicketPage() {
     t.airline?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const fareFields = ['base_fare', 'total_fare_input', 'ut', 'bd', 'e5', 'commission_rate', 'service_charge'];
+  const fareFields = ['base_fare', 'total_fare_input', 'ut', 'bd', 'e5', 'ow', 'p7', 'p8', 'e7', 'g8', 'ts', 'commission_rate', 'service_charge'];
   
   const updateActiveForm = (field: string, val: any) => {
     setForms(prev => {
@@ -224,6 +281,64 @@ export function IndividualTicketPage() {
         return next;
       });
     }
+  };
+
+  const addCustomTaxField = () => {
+    setForms(prev => {
+      const next = [...prev];
+      const list = [...(next[activeTab].custom_taxes || []), { code: '', amount: 0 }];
+      next[activeTab] = { ...next[activeTab], custom_taxes: list };
+      return next;
+    });
+    setNeedsRecalc(prev => {
+      const next = [...prev];
+      next[activeTab] = true;
+      return next;
+    });
+  };
+
+  const updateCustomTaxField = (idx: number, field: 'code' | 'amount', val: any) => {
+    setForms(prev => {
+      const next = [...prev];
+      const list = [...(next[activeTab].custom_taxes || [])];
+      list[idx] = { ...list[idx], [field]: field === 'amount' ? (Number(val) || 0) : val.toUpperCase() };
+      next[activeTab] = { ...next[activeTab], custom_taxes: list };
+      return next;
+    });
+    setNeedsRecalc(prev => {
+      const next = [...prev];
+      next[activeTab] = true;
+      return next;
+    });
+  };
+
+  const removeCustomTaxField = (idx: number) => {
+    setForms(prev => {
+      const next = [...prev];
+      const list = [...(next[activeTab].custom_taxes || [])];
+      list.splice(idx, 1);
+      next[activeTab] = { ...next[activeTab], custom_taxes: list };
+      return next;
+    });
+    setNeedsRecalc(prev => {
+      const next = [...prev];
+      next[activeTab] = true;
+      return next;
+    });
+  };
+
+  const copyFlightDetailsToNewPassenger = () => {
+    const currentForm = forms[activeTab];
+    const clonedForm = {
+      ...currentForm,
+      passenger_name: '',
+      passport_number: '',
+      ticket_number: ''
+    };
+    setForms(prev => [...prev, clonedForm]);
+    setFareDatas(prev => [...prev, getFareData(clonedForm)]);
+    setNeedsRecalc(prev => [...prev, false]);
+    setActiveTab(forms.length);
   };
   
   const updateMetadata = (idx: number, field: 'key' | 'value', val: string) => {
@@ -442,7 +557,7 @@ export function IndividualTicketPage() {
       }
     }
 
-    // 8. TAX BREAKDOWN
+    // 8. TAX BREAKDOWN (Domestic & International Codes)
     const utMatch = text.match(/UT\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*UT/i);
     if (utMatch) newData.ut = parseInt(utMatch[1].replace(/,/g, ''));
 
@@ -451,6 +566,29 @@ export function IndividualTicketPage() {
 
     const e5Match = text.match(/E5\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*E5/i);
     if (e5Match) newData.e5 = parseInt(e5Match[1].replace(/,/g, ''));
+
+    const owMatch = text.match(/OW\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*OW/i);
+    if (owMatch) newData.ow = parseInt(owMatch[1].replace(/,/g, ''));
+
+    const p7Match = text.match(/P7\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*P7/i);
+    if (p7Match) newData.p7 = parseInt(p7Match[1].replace(/,/g, ''));
+
+    const p8Match = text.match(/P8\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*P8/i);
+    if (p8Match) newData.p8 = parseInt(p8Match[1].replace(/,/g, ''));
+
+    const e7Match = text.match(/E7\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*E7/i);
+    if (e7Match) newData.e7 = parseInt(e7Match[1].replace(/,/g, ''));
+
+    const g8Match = text.match(/G8\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*G8/i);
+    if (g8Match) newData.g8 = parseInt(g8Match[1].replace(/,/g, ''));
+
+    const tsMatch = text.match(/TS\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*TS/i);
+    if (tsMatch) newData.ts = parseInt(tsMatch[1].replace(/,/g, ''));
+
+    // Check if origin or destination is non-BD to auto-set international
+    if (newData.origin !== 'DAC' || (newData.destination && !['CXB', 'CGP', 'ZYL', 'SPD', 'JSR', 'RJH', 'BZL'].includes(newData.destination))) {
+      newData.ticket_category = 'international';
+    }
 
     setForms([newData]);
     setFareDatas([getFareData(newData)]);
@@ -490,8 +628,9 @@ REQUIRED JSON FIELD SPECIFICATIONS:
 7. "travel_date": Date of flight formatted as YYYY-MM-DD (e.g. "2026-08-15").
 8. "base_fare": Base airfare amount as a number.
 9. "total_fare": Total price paid as a number.
-10. "ut_tax", "bd_tax", "e5_tax": Specific tax breakdown numbers if mentioned.
-11. "extra_info": Array of key-value objects for baggage, class, meal, etc.
+10. "ut_tax", "bd_tax", "e5_tax", "ow_tax", "p7_tax", "p8_tax", "e7_tax", "g8_tax", "ts_tax": Specific tax breakdown numbers if mentioned.
+11. "ticket_category": "domestic" or "international".
+12. "extra_info": Array of key-value objects for baggage, class, meal, etc.
 
 Text to parse:
 """
@@ -570,6 +709,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
       if (Array.isArray(parsedPassengers) && parsedPassengers.length > 0) {
         const newForms = parsedPassengers.map(p => ({
           ...emptyForm,
+          ticket_category: p.ticket_category === 'domestic' ? 'domestic' : 'international',
           passenger_name: p.passenger_name || '',
           ticket_number: p.ticket_number || '',
           pnr: p.pnr || '',
@@ -582,7 +722,16 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           ut: p.ut_tax || 0,
           bd: p.bd_tax || 0,
           e5: p.e5_tax || 0,
-          metadata: p.extra_info || []
+          ow: p.ow_tax || 0,
+          p7: p.p7_tax || 0,
+          p8: p.p8_tax || 0,
+          e7: p.e7_tax || 0,
+          g8: p.g8_tax || 0,
+          ts: p.ts_tax || 0,
+          metadata: p.extra_info || [
+            { key: 'Baggage', value: '30 KG' },
+            { key: 'Value', value: '' }
+          ]
         }));
 
         setForms(newForms);
@@ -749,32 +898,44 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Issue New Air Ticket" size="xl">
         <div className="p-5 flex flex-col gap-4">
           
-          {/* Multi-Passenger Tabs */}
-          <div className="flex gap-1 border-b border-neutral-200 pb-2 mb-2 overflow-x-auto">
-            {forms.map((f, i) => (
-              <div key={i} className={`flex items-center rounded-t-lg transition-colors border-b-2 ${activeTab === i ? 'bg-primary-50 border-primary-600' : 'hover:bg-neutral-50 border-transparent'}`}>
-                <button 
-                  onClick={() => setActiveTab(i)}
-                  className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${activeTab === i ? 'text-primary-700' : 'text-neutral-500'}`}
-                >
-                  {f.passenger_name || `Passenger ${i+1}`}
-                </button>
-                {forms.length > 1 && (
+          {/* Sticky Top Header: Multi-Passenger Tabs & Clone Options */}
+          <div className="sticky top-0 bg-white z-10 pt-1 pb-2 border-b border-neutral-200 flex items-center justify-between overflow-x-auto gap-2">
+            <div className="flex gap-1 items-center">
+              {forms.map((f, i) => (
+                <div key={i} className={`flex items-center rounded-t-lg transition-colors border-b-2 ${activeTab === i ? 'bg-primary-50 border-primary-600' : 'hover:bg-neutral-50 border-transparent'}`}>
                   <button 
-                    onClick={() => removePassengerTab(i)}
-                    className="pr-2 pl-1 text-neutral-400 hover:text-error-500"
+                    onClick={() => setActiveTab(i)}
+                    className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${activeTab === i ? 'text-primary-700 font-bold' : 'text-neutral-500'}`}
                   >
-                    &times;
+                    👤 {f.passenger_name || `Passenger ${i+1}`}
                   </button>
-                )}
-              </div>
-            ))}
-            <button 
-              onClick={addNewPassengerTab}
-              className="px-3 py-1.5 text-xs text-primary-600 font-semibold hover:bg-primary-50 rounded-t-lg flex items-center gap-1 border-b-2 border-transparent"
-            >
-              <Plus size={12} /> Add
-            </button>
+                  {forms.length > 1 && (
+                    <button 
+                      onClick={() => removePassengerTab(i)}
+                      className="pr-2 pl-1 text-neutral-400 hover:text-error-500 font-bold"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button 
+                onClick={addNewPassengerTab}
+                className="px-3 py-1.5 text-xs text-primary-600 font-semibold hover:bg-primary-50 rounded-t-lg flex items-center gap-1 border-b-2 border-transparent"
+              >
+                <Plus size={12} /> Add Passenger
+              </button>
+            </div>
+
+            {forms.length > 0 && (
+              <button
+                onClick={copyFlightDetailsToNewPassenger}
+                className="text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-200 flex items-center gap-1 transition-colors shrink-0 shadow-sm"
+                title="Copy current flight route & fare to new passenger tab under same PNR"
+              >
+                📋 Copy Route to New Pax
+              </button>
+            )}
           </div>
 
           {error && (
@@ -783,26 +944,56 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             </div>
           )}
 
+          {/* Ticket Type / Category Selector */}
+          <div className="bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-neutral-700">Ticket Type:</span>
+              <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                <input
+                  type="radio"
+                  name={`ticket_cat_${activeTab}`}
+                  checked={form.ticket_category === 'domestic'}
+                  onChange={() => updateActiveForm('ticket_category', 'domestic')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                🏠 Domestic (অভ্যন্তরীণ)
+              </label>
+              <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                <input
+                  type="radio"
+                  name={`ticket_cat_${activeTab}`}
+                  checked={form.ticket_category === 'international'}
+                  onChange={() => updateActiveForm('ticket_category', 'international')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                ✈️ International (আন্তর্জাতিক)
+              </label>
+            </div>
+            <span className="text-[10px] text-neutral-400 font-medium">
+              {form.ticket_category === 'international' ? 'Full International Tax Breakdown Enabled' : 'Standard Domestic Taxes'}
+            </span>
+          </div>
+
           {/* Row 1: Passenger & Route Information */}
           <div className="grid grid-cols-12 gap-3">
             <div className="col-span-3">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passenger Name *</label>
-              <input className="input-field py-1.5 px-2.5 text-xs" value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport" />
+              <input className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport" />
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passport</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} />
+              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} placeholder="Passport No." />
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">PNR *</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.pnr} onChange={e => updateActiveForm('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
+              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase font-bold text-primary-700" value={form.pnr} onChange={e => updateActiveForm('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
             </div>
             <div className="col-span-3">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ticket Number</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono" value={form.ticket_number || ''} onChange={e => updateActiveForm('ticket_number', e.target.value)} placeholder="13-digit" />
+              <input className="input-field py-1.5 px-2.5 text-xs font-mono font-semibold" value={form.ticket_number || ''} onChange={e => updateActiveForm('ticket_number', e.target.value)} placeholder="13-digit Ticket No." />
             </div>
             <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Source</label>
+              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Source / Vendor</label>
               <select className="input-field py-1.5 px-2.5 text-xs" value={form.supplier_id} onChange={e => updateActiveForm('supplier_id', e.target.value)}>
                 <option value="">Direct / GDS</option>
                 {suppliers.map(s => (
@@ -816,20 +1007,20 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           <div className="grid grid-cols-12 gap-3">
             <div className="col-span-3">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Airline *</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.airline} onChange={e => updateActiveForm('airline', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.airline} onChange={e => updateActiveForm('airline', e.target.value)}>
                 <option value="">Select airline</option>
                 {airlineList.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Origin</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.origin} onChange={e => updateActiveForm('origin', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold" value={form.origin} onChange={e => updateActiveForm('origin', e.target.value)}>
                 {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Destination</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.destination} onChange={e => updateActiveForm('destination', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold" value={form.destination} onChange={e => updateActiveForm('destination', e.target.value)}>
                 <option value="">Select</option>
                 {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code}</option>)}
               </select>
@@ -844,50 +1035,140 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             </div>
             <div className="col-span-1">
               <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Class</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.cabin_class} onChange={e => updateActiveForm('cabin_class', e.target.value)}>
+              <select className="input-field py-1.5 px-2.5 text-xs capitalize" value={form.cabin_class} onChange={e => updateActiveForm('cabin_class', e.target.value)}>
                 <option value="economy">Economy</option>
+                <option value="premium_economy">Prem. Eco</option>
                 <option value="business">Business</option>
                 <option value="first">First</option>
               </select>
             </div>
           </div>
 
-          {/* Row 3: Fare Inputs */}
-          <div className="grid grid-cols-7 gap-3 bg-neutral-50 p-3 rounded-xl border border-neutral-100">
-            <div>
-              <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Base Fare *</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.base_fare} onChange={e => updateActiveForm('base_fare', e.target.value)} />
+          {/* Row 3: Fare & Base Financials */}
+          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200 space-y-3">
+            <div className="flex justify-between items-center border-b border-neutral-200 pb-1.5">
+              <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Fare & Commission Inputs</span>
+              <span className="text-[10px] text-neutral-500 font-semibold">Enter Base & Total Fare or Tax Breakdown</span>
             </div>
-            <div>
-              <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Total Fare *</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.total_fare_input} onChange={e => updateActiveForm('total_fare_input', e.target.value)} />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">UT</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.ut} onChange={e => updateActiveForm('ut', e.target.value)} />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">BD</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.bd} onChange={e => updateActiveForm('bd', e.target.value)} />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">E5</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.e5} onChange={e => updateActiveForm('e5', e.target.value)} />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Comm. (%)</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs" value={form.commission_rate} onChange={e => updateActiveForm('commission_rate', e.target.value)} />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Service Chg</label>
-              <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold" value={form.service_charge} onChange={e => updateActiveForm('service_charge', e.target.value)} />
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Base Fare (BDT) *</label>
+                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-bold text-neutral-800" value={form.base_fare} onChange={e => updateActiveForm('base_fare', e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Total Fare (BDT) *</label>
+                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-bold text-primary-700" value={form.total_fare_input} onChange={e => updateActiveForm('total_fare_input', e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Comm. (%)</label>
+                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.commission_rate} onChange={e => updateActiveForm('commission_rate', e.target.value)} placeholder="7" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Service Charge (BDT)</label>
+                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-success-700" value={form.service_charge} onChange={e => updateActiveForm('service_charge', e.target.value)} placeholder="0" />
+              </div>
             </div>
           </div>
+
+          {/* Row 4: Tax Breakdown Grid (Domestic & International Codes) */}
+          <div className="card p-3 border border-neutral-200 space-y-2 bg-white">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-1.5">
+              <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1">
+                💸 Itemized Tax Breakdown {form.ticket_category === 'international' ? '(BD, E5, OW, P7, P8, UT, E7, G8, TS)' : '(BD, UT, E5)'}
+              </span>
+              <button
+                type="button"
+                onClick={addCustomTaxField}
+                className="text-[11px] font-bold text-primary-600 hover:text-primary-700 flex items-center gap-1"
+              >
+                <Plus size={12} /> Add Custom Tax Code
+              </button>
+            </div>
+
+            {/* Standard Taxes Grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-9 gap-2">
+              <div>
+                <label className="text-[9px] font-bold text-neutral-500 block uppercase">BD Tax</label>
+                <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.bd} onChange={e => updateActiveForm('bd', e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-neutral-500 block uppercase">E5 Tax</label>
+                <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.e5} onChange={e => updateActiveForm('e5', e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-neutral-500 block uppercase">UT Tax</label>
+                <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.ut} onChange={e => updateActiveForm('ut', e.target.value)} />
+              </div>
+              {form.ticket_category === 'international' && (
+                <>
+                  <div>
+                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">OW Tax</label>
+                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.ow} onChange={e => updateActiveForm('ow', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">P7 Tax</label>
+                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.p7} onChange={e => updateActiveForm('p7', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">P8 Tax</label>
+                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.p8} onChange={e => updateActiveForm('p8', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">E7 Tax</label>
+                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.e7} onChange={e => updateActiveForm('e7', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">G8 Tax</label>
+                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.g8} onChange={e => updateActiveForm('g8', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">TS Tax</label>
+                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.ts} onChange={e => updateActiveForm('ts', e.target.value)} />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Custom Tax Codes List */}
+            {form.custom_taxes && form.custom_taxes.length > 0 && (
+              <div className="space-y-1.5 pt-1 border-t border-neutral-100">
+                <span className="text-[10px] font-bold text-neutral-500 uppercase">Additional Custom Tax Codes:</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {form.custom_taxes.map((ct, idx) => (
+                    <div key={idx} className="flex gap-2 items-center bg-neutral-50 p-1.5 rounded-lg border border-neutral-200">
+                      <input
+                        className="input-field py-1 px-2 text-xs font-mono font-bold w-1/3 bg-white"
+                        placeholder="Tax Code (e.g. YQ)"
+                        value={ct.code}
+                        onChange={e => updateCustomTaxField(idx, 'code', e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        className="input-field py-1 px-2 text-xs font-semibold flex-1 bg-white"
+                        placeholder="Amount"
+                        value={ct.amount}
+                        onChange={e => updateCustomTaxField(idx, 'amount', e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomTaxField(idx)}
+                        className="text-error-400 hover:text-error-600 p-1 rounded"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           
-          {/* Dynamic Custom Fields */}
+          {/* Dynamic Custom Fields / Baggage & Value */}
           <div className="bg-white border rounded-xl p-3">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-[11px] font-bold text-neutral-600 uppercase">Additional Info (Dynamic Fields)</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-[11px] font-bold text-neutral-600 uppercase">Additional Info (Dynamic Fields: Baggage & Value)</h3>
               <button onClick={addMetadataField} className="text-[11px] text-primary-600 font-semibold flex items-center gap-1 hover:underline">
                 <Plus size={12} /> Add Custom Field
               </button>
@@ -896,22 +1177,22 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                <p className="text-xs text-neutral-400 italic">No custom fields added. E.g. Baggage, Meal Preference, Seat.</p>
             )}
             {form.metadata?.map((meta, idx) => (
-              <div key={idx} className="flex gap-2 mb-2">
+              <div key={idx} className="flex gap-2 mb-1.5">
                 <input 
-                  className="input-field py-1.5 px-2.5 text-xs w-1/3 bg-neutral-50" 
-                  placeholder="Field Name (e.g. Baggage)" 
+                  className="input-field py-1 px-2.5 text-xs w-1/3 bg-neutral-50 font-semibold" 
+                  placeholder="Field Name (e.g. Baggage / Value)" 
                   value={meta.key} 
                   onChange={e => updateMetadata(idx, 'key', e.target.value)} 
                 />
                 <input 
-                  className="input-field py-1.5 px-2.5 text-xs flex-1" 
-                  placeholder="Value (e.g. 30 KG)" 
+                  className="input-field py-1 px-2.5 text-xs flex-1" 
+                  placeholder="Value (e.g. 30 KG / 2 Pieces)" 
                   value={meta.value} 
                   onChange={e => updateMetadata(idx, 'value', e.target.value)} 
                 />
                 <button 
                   onClick={() => removeMetadataField(idx)} 
-                  className="text-error-400 hover:text-error-600 p-1.5 hover:bg-error-50 rounded transition-colors"
+                  className="text-error-400 hover:text-error-600 p-1 hover:bg-error-50 rounded transition-colors"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -919,9 +1200,9 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             ))}
           </div>
 
-          {/* Row 4: Calculations & Totals */}
-          <div className="flex justify-between items-end mb-2 mt-2">
-             <h3 className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider">Calculation Results</h3>
+          {/* Row 5: Calculations & Financial Totals */}
+          <div className="flex justify-between items-end mb-1 mt-1">
+             <h3 className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider">Calculation Results & Financials</h3>
              <button 
                 onClick={handleRecalculate}
                 disabled={!currentNeedsRecalc}
@@ -930,14 +1211,14 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                {currentNeedsRecalc ? 'Click to Recalculate' : 'Up to date'}
              </button>
           </div>
-          <div className={`flex flex-col md:flex-row gap-4 p-3 rounded-xl border transition-all ${currentNeedsRecalc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 'bg-primary-50/50 border-primary-100'}`}>
-            <div className="flex-1 grid grid-cols-4 gap-2">
+          <div className={`flex flex-col md:flex-row gap-3 p-3 rounded-xl border transition-all ${currentNeedsRecalc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 'bg-primary-50/50 border-primary-100'}`}>
+            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Tax/AIT</span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Total Tax / AIT</span>
                 <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.tax_ait)}</span>
               </div>
               <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>VAT</span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>VAT (3%)</span>
                 <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.vat)}</span>
               </div>
               <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
@@ -951,11 +1232,11 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             </div>
             
             <div className="flex items-stretch gap-2 shrink-0">
-              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-primary-600 text-white'}`}>
+              <div className={`px-4 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-primary-600 text-white'}`}>
                 <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-200'}`}>Client Fare</span>
                 <span className="text-sm font-black">{currentNeedsRecalc ? '---' : formatBDT(fareData.total_client_fare)}</span>
               </div>
-              <div className={`px-5 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-success-600 text-white'}`}>
+              <div className={`px-4 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-success-600 text-white'}`}>
                 <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-success-200'}`}>Net Profit</span>
                 <span className="text-sm font-black">{currentNeedsRecalc ? '---' : formatBDT(fareData.net_profit)}</span>
               </div>
