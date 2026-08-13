@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Models, Query } from 'appwrite';
+import { Models } from 'appwrite';
 import { account, databases, databaseId, Profile } from '../lib/appwrite';
 
 interface AuthContextType {
@@ -32,8 +32,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      // Fetch the profile document directly using the user's ID
-      const profileDoc = await databases.getDocument(databaseId, 'profiles', userId);
+      if (!databaseId) {
+        console.warn('Appwrite databaseId not configured.');
+        return;
+      }
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 1200)
+      );
+      const profileDoc = await Promise.race([
+        databases.getDocument(databaseId, 'profiles', userId),
+        timeout,
+      ]);
       setProfile(profileDoc as unknown as Profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -43,18 +52,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Safety fallback timer: Ensure loading spinner turns off after 2.5 seconds max
+    // Strict 1.2-second fallback timer: Ensures loading spinner turns off under all network conditions
     const timer = setTimeout(() => {
       if (isMounted) {
         setLoading(false);
       }
-    }, 2500);
+    }, 1200);
 
     const initializeAuth = async () => {
       try {
-        // Race session checks against a 2-second timeout to prevent hanging on slow/blocked connections
         const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), 2000)
+          setTimeout(() => reject(new Error('Auth check timeout')), 1200)
         );
 
         const currentSession = (await Promise.race([
@@ -77,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await fetchProfile(currentUser.$id);
         }
       } catch (error) {
-        // Not logged in or session expired or timeout
         console.log('No active session found or request timed out.');
         if (isMounted) {
           setSession(null);
@@ -119,12 +126,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setProfile(null);
     } catch (error) {
-      console.error('Sign out error:', error);
+      console.error('Error signing out:', error);
     }
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchProfile(user.$id);
+    if (user) {
+      await fetchProfile(user.$id);
+    }
   };
 
   return (

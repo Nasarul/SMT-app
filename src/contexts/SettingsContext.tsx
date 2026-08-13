@@ -32,25 +32,39 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshSettings = async () => {
+    const fallbackTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1200);
+
     try {
-      const { data } = await supabase.from('settings').select('*');
-      data?.forEach(s => {
-        if (s.key === 'company') {
-          setCompany(s.value);
-          // Update Document Title and Favicon dynamically
-          document.title = `${s.value.name} | Management Portal`;
-          if (s.value.logo_url) {
-            const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
-            link.type = 'image/x-icon';
-            link.rel = 'shortcut icon';
-            link.href = s.value.logo_url;
-            document.getElementsByTagName('head')[0].appendChild(link);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Settings fetch timeout')), 1200)
+      );
+
+      const response = await Promise.race([
+        supabase.from('settings').select('*'),
+        timeout
+      ]) as any;
+
+      if (response && response.data && Array.isArray(response.data)) {
+        response.data.forEach((s: any) => {
+          if (s.key === 'company' && s.value) {
+            setCompany(s.value);
+            document.title = `${s.value.name || 'Sonar Madina Travels'} | Management Portal`;
+            if (s.value.logo_url) {
+              const link = (document.querySelector("link[rel*='icon']") as HTMLLinkElement) || document.createElement('link');
+              link.type = 'image/x-icon';
+              link.rel = 'shortcut icon';
+              link.href = s.value.logo_url;
+              document.getElementsByTagName('head')[0].appendChild(link);
+            }
           }
-        }
-      });
+        });
+      }
     } catch (err) {
       console.error('Error loading global settings:', err);
     } finally {
+      clearTimeout(fallbackTimer);
       setLoading(false);
     }
   };
