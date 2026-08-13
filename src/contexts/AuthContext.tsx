@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Models } from 'appwrite';
+import { Models, ID } from 'appwrite';
 import { account, databases, databaseId, Profile } from '../lib/appwrite';
 
 interface AuthContextType {
@@ -108,14 +108,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const session = await account.createEmailPasswordSession(email, password);
-      setSession(session);
+      // 1. Purge active session to prevent 409 conflict
+      try {
+        await account.deleteSession('current');
+      } catch (e) {
+        // Ignore if no active session
+      }
+
+      let activeSession: Models.Session;
+      try {
+        activeSession = await account.createEmailPasswordSession(email, password);
+      } catch (sessionErr: any) {
+        const errMsg = sessionErr?.message || '';
+        const code = sessionErr?.code;
+
+        // If user does not exist yet in Appwrite backend, auto-provision user account
+        if (code === 404 || errMsg.toLowerCase().includes('user_not_found') || errMsg.toLowerCase().includes('could not be found')) {
+          try {
+            const displayName = email.split('@')[0].replace(/[._-]/g, ' ');
+            await account.create(ID.unique(), email, password, displayName);
+            activeSession = await account.createEmailPasswordSession(email, password);
+          } catch (createErr: any) {
+            return { error: createErr?.message || 'Failed to auto-create user account in Appwrite.' };
+          }
+        } else {
+          return { error: errMsg || 'Invalid login credentials. Please check your email and password.' };
+        }
+      }
+
+      setSession(activeSession);
       const currentUser = await account.get();
       setUser(currentUser);
       await fetchProfile(currentUser.$id);
       return { error: null };
     } catch (error: any) {
-      return { error: error.message };
+      console.error('Appwrite Sign In Error:', error);
+      return { error: error?.message || 'Login failed. Please check your credentials.' };
     }
   };
 
