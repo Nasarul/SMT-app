@@ -44,7 +44,6 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 
-
 const moduleTitles: Record<ActiveModule, { title: string; subtitle?: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Overview of all operations' },
   'mobile-dashboard': { title: 'Management View', subtitle: 'Live mobile-optimized stats' },
@@ -86,16 +85,21 @@ const moduleTitles: Record<ActiveModule, { title: string; subtitle?: string }> =
   profile: { title: 'My Profile', subtitle: 'Manage your personal information & security' },
 };
 
-
 function AppContent() {
   const { user, loading } = useAuth();
   const [active, setActive] = useState<ActiveModule>('dashboard');
+  const [forceLoaded, setForceLoaded] = useState(false);
 
   useEffect(() => {
     initOfflineSync();
+    // Safety fallback: Guarantee loading spinner unlocks after 1.5s max under all circumstances
+    const timer = setTimeout(() => {
+      setForceLoaded(true);
+    }, 1500);
+    return () => clearTimeout(timer);
   }, []);
 
-  if (loading) {
+  if (loading && !forceLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
         <div className="flex flex-col items-center gap-4">
