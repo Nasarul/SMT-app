@@ -134,8 +134,8 @@ export function IndividualTicketPage() {
   };
 
   const getFareData = (fData: any) => {
-    const base = Math.max(0, Number(fData.base_fare) || 0);
-    const total_input = Math.max(0, Number(fData.total_fare_input) || 0);
+    let base = Math.max(0, Number(fData.base_fare) || 0);
+    let total_input = Math.max(0, Number(fData.total_fare_input) || 0);
     
     const bd = Math.max(0, Number(fData.bd) || 0);
     const e5 = Math.max(0, Number(fData.e5) || 0);
@@ -151,8 +151,18 @@ export function IndividualTicketPage() {
     const itemizedTaxSum = bd + e5 + ow + p7 + p8 + ut + e7 + g8 + ts + customTaxSum;
 
     // Calculate total tax and calculated total fare
-    const tax_ait = total_input > 0 && total_input >= base ? (total_input - base) : itemizedTaxSum;
-    const calculated_total_fare = total_input > 0 ? total_input : (base + itemizedTaxSum);
+    let tax_ait = itemizedTaxSum;
+    if (tax_ait === 0 && total_input > base) {
+      tax_ait = total_input - base;
+    }
+
+    if (total_input === 0 && base > 0) {
+      total_input = base + tax_ait;
+    } else if (base === 0 && total_input > 0) {
+      base = Math.max(0, total_input - tax_ait);
+    }
+
+    const calculated_total_fare = total_input > 0 ? total_input : (base + tax_ait);
 
     const comm_rate = Math.max(0, Number(fData.commission_rate) || 0);
     const svc = Math.max(0, Number(fData.service_charge) || 0);
@@ -340,7 +350,7 @@ export function IndividualTicketPage() {
     setNeedsRecalc(prev => [...prev, false]);
     setActiveTab(forms.length);
   };
-  
+
   const updateMetadata = (idx: number, field: 'key' | 'value', val: string) => {
     setForms(prev => {
       const next = [...prev];
@@ -350,7 +360,7 @@ export function IndividualTicketPage() {
       return next;
     });
   };
-  
+
   const addMetadataField = () => {
     setForms(prev => {
       const next = [...prev];
@@ -359,7 +369,7 @@ export function IndividualTicketPage() {
       return next;
     });
   };
-  
+
   const removeMetadataField = (idx: number) => {
     setForms(prev => {
       const next = [...prev];
@@ -369,14 +379,14 @@ export function IndividualTicketPage() {
       return next;
     });
   };
-  
+
   const addNewPassengerTab = () => {
     setForms(prev => [...prev, { ...emptyForm }]);
     setFareDatas(prev => [...prev, getFareData(emptyForm)]);
     setNeedsRecalc(prev => [...prev, false]);
     setActiveTab(forms.length);
   };
-  
+
   const removePassengerTab = (indexToRemove: number) => {
     if (forms.length <= 1) return;
     setForms(prev => prev.filter((_, i) => i !== indexToRemove));
@@ -395,14 +405,20 @@ export function IndividualTicketPage() {
 
     const newData = { ...emptyForm };
 
-    // Common system / non-passenger words to exclude
-    const forbiddenWords = ['PRIZE', 'PROMO', 'ERROR', 'MESSAGE', 'ECONOMY', 'BUSINESS', 'FIRST', 'ADULT', 'CHILD', 'INFANT', 'TERMS', 'CONDITIONS', 'PAYMENT', 'METHOD', 'CREDIT', 'DEBIT', 'TOTAL', 'FARE', 'TAX', 'FEE', 'REF', 'CODE', 'BOOKING', 'STATUS', 'ISSUED', 'DATE', 'FLIGHT', 'TICKET', 'COUPON', 'NOTICE', 'AGENCY', 'COMPANY', 'US-BANGLA', 'BIMAN', 'AIRLINE', 'AIRLINES', 'ROUTING', 'ENDORSEMENT', 'CHECK-IN', 'BAGGAGE', 'SERVICE', 'CHARGE', 'PASSENGER'];
+    const forbiddenWords = [
+      'PRIZE', 'PROMO', 'ERROR', 'MESSAGE', 'ECONOMY', 'BUSINESS', 'FIRST', 'ADULT',
+      'CHILD', 'INFANT', 'TERMS', 'CONDITIONS', 'PAYMENT', 'METHOD', 'CREDIT', 'DEBIT',
+      'TOTAL', 'FARE', 'TAX', 'FEE', 'REF', 'CODE', 'BOOKING', 'STATUS', 'ISSUED',
+      'DATE', 'FLIGHT', 'TICKET', 'COUPON', 'NOTICE', 'AGENCY', 'COMPANY', 'US-BANGLA',
+      'BIMAN', 'AIRLINE', 'AIRLINES', 'ROUTING', 'ENDORSEMENT', 'CHECK-IN', 'BAGGAGE',
+      'SERVICE', 'CHARGE', 'PASSENGER', 'ITINERARY', 'RECEIPT', 'ELECTRONIC', 'RECORD',
+      'AGENT', 'TRAVELS', 'PURANA', 'PALTAN', 'DARUS', 'SALAM', 'ADDRESS', 'TELEPHONE', 'IATA'
+    ];
 
     // 1. PASSENGER NAME
     let extractedName = '';
-
     const namePrefixMatch = 
-      text.match(/(?:PASSENGER NAME|PASSENGER DETAILS|PASSENGER|PREPARED FOR|PAX NAME|NAME|PAX)\s*:?\s*([A-Z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|FORM OF|FOOP|RL|REF|RESERVATION|STATUS|ISSD|\r|\n|$))/i) ||
+      text.match(/(?:PASSENGER\s+NAME|PASSENGER\s+DETAILS|PAX\s+NAME|PREPARED\s+FOR|NAME)\s*[:#\s]+\s*([A-Z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|FORM OF|FOOP|RL|REF|RESERVATION|STATUS|ISSD|ISSUING|\r|\n|$))/i) ||
       text.match(/(?:1\.|2\.|3\.|01\.|02\.)\s*([A-Z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|\r|\n|$))/i);
 
     if (namePrefixMatch) {
@@ -425,15 +441,21 @@ export function IndividualTicketPage() {
       }
     }
 
+    if (!extractedName) {
+      const titleNameMatch = text.match(/(?:Mr\.|Mrs\.|Ms\.|Mstr\.)\s+([A-Za-z\s.]+?)(?=\s+\d{10,14}|\s+MAAS|\s+Adult|\r|\n|$)/i);
+      if (titleNameMatch) {
+        extractedName = titleNameMatch[1].trim();
+      }
+    }
+
     if (extractedName) {
       newData.passenger_name = extractedName;
     }
 
-    // 2. PNR / BOOKING REFERENCE (US-Bangla e.g. "Booking Reference : BS/K9X2P4" or "PNR : K9X2P4")
+    // 2. PNR / BOOKING REFERENCE (Supports GDS headers e.g. "BOOKING REF : AMADEUS: 9XEUBG")
     const invalidPnrs = ['ERENCE', 'NUMBER', 'AMADEU', 'GALILE', 'SABRE', 'REFNUM', 'CODE00', 'STATUS', 'DETAILS'];
-    
     const pnrMatches = [
-      ...text.matchAll(/(?:PNR|BOOKING REFERENCE|BOOKING REF|RESERVATION CODE|RESERVATION NO|RECORD LOCATOR|CONFIRMATION|RL)\s*:?\s*(?:[A-Z2-9]{2}\/)?([A-Z0-9]{6})\b/gi)
+      ...text.matchAll(/(?:PNR|BOOKING REFERENCE|BOOKING REF|RESERVATION CODE|RESERVATION NO|RECORD LOCATOR|CONFIRMATION|RL)\s*[:#\s]*\s*(?:AMADEUS|GALILEO|SABRE|1A|1G|1P|1V|AIRLINE)?\s*[:#\s]*\s*(?:[A-Z0-9]{2}\/)?([A-Z0-9]{6})\b/gi)
     ];
 
     for (const match of pnrMatches) {
@@ -445,7 +467,7 @@ export function IndividualTicketPage() {
     }
 
     if (!newData.pnr) {
-      const pnrStandalone = text.match(/\bPNR\s*:?\s*([A-Z0-9]{6})\b/i);
+      const pnrStandalone = text.match(/\bPNR\s*[:#\s]*\s*([A-Z0-9]{6})\b/i);
       if (pnrStandalone && !invalidPnrs.includes(pnrStandalone[1].toUpperCase()) && !/^\d{6}$/.test(pnrStandalone[1])) {
         newData.pnr = pnrStandalone[1].toUpperCase();
       }
@@ -453,36 +475,80 @@ export function IndividualTicketPage() {
 
     // 3. TICKET NUMBER
     const tktMatch = 
-      text.match(/(?:TICKET NUMBER|ETKT|TICKET NO|TICKET)\s*:?\s*([0-9\s-]{10,20})/i) ||
+      text.match(/(?:TICKET NUMBER|ETKT|TICKET NO|TICKET)\s*[:#\s]*\s*([0-9\s-]{10,20})/i) ||
       text.match(/\b(\d{3}[-\s]?\d{10})\b/);
       
     if (tktMatch) {
       newData.ticket_number = tktMatch[1].replace(/[\s-]/g, '').trim();
     }
 
-    // 4. AIRLINE DETECTION
-    if (/US-BANGLA|US BANGLA|BS\b/i.test(text)) newData.airline = 'US-Bangla Airlines';
-    else if (/BIMAN|BANGLADESH AIRLINES|BG\b/i.test(text)) newData.airline = 'Biman Bangladesh Airlines';
-    else if (/AIR ARABIA|G9\b/i.test(text)) newData.airline = 'Air Arabia';
-    else if (/FLYDUBAI|FZ\b/i.test(text)) newData.airline = 'flydubai';
-    else if (/EMIRATES|EK\b/i.test(text)) newData.airline = 'Emirates';
-    else if (/SAUDIA|SAUDI ARABIAN|SV\b/i.test(text)) newData.airline = 'Saudia';
-    else if (/QATAR|QR\b/i.test(text)) newData.airline = 'Qatar Airways';
-    else if (/GULF AIR|GF\b/i.test(text)) newData.airline = 'Gulf Air';
-    else if (/KUWAIT|KU\b/i.test(text)) newData.airline = 'Kuwait Airways';
-    else if (/JAZEERA|J9\b/i.test(text)) newData.airline = 'Jazeera Airways';
-    else if (/SALAMAIR|OV\b/i.test(text)) newData.airline = 'SalamAir';
-    else if (/MALAYSIA AIRLINES|MH\b/i.test(text)) newData.airline = 'Malaysia Airlines';
-    else if (/SINGAPORE AIRLINES|SQ\b/i.test(text)) newData.airline = 'Singapore Airlines';
-    else if (/THAI AIRWAYS|TG\b/i.test(text)) newData.airline = 'Thai Airways';
-    else if (/INDIGO|6E\b/i.test(text)) newData.airline = 'IndiGo';
+    // 4. AIRLINE DETECTION (Header vs Code Matching)
+    let extractedAirline = '';
+    const issuingMatch = text.match(/ISSUING\s+AIRLINE\s*[:#\s]*\s*([A-Z0-9\s-]+?)(?=\s*(?:TICKET|ETKT|BOOKING|DATE|PNR|\r|\n|$))/i);
+    if (issuingMatch) {
+      const cand = issuingMatch[1].trim();
+      if (cand.length > 2 && !forbiddenWords.includes(cand.toUpperCase())) {
+        extractedAirline = cand;
+      }
+    }
 
-    // 5. ROUTE / ORIGIN & DESTINATION (e.g. "DAC - CXB" or "Dhaka to Cox's Bazar")
+    if (!extractedAirline) {
+      if (/CATHAY\s*PACIFIC|\bCX\b/i.test(text)) extractedAirline = 'Cathay Pacific';
+      else if (/US-BANGLA|US BANGLA|\bBS\b/i.test(text)) extractedAirline = 'US-Bangla Airlines';
+      else if (/\b(BIMAN|BANGLADESH AIRLINES)\b/i.test(text) || (/\bBG\b/i.test(text) && !/\b[A-Z0-9]{4,5}BG\b/i.test(text))) extractedAirline = 'Biman Bangladesh Airlines';
+      else if (/AIR ARABIA|\bG9\b/i.test(text)) extractedAirline = 'Air Arabia';
+      else if (/FLYDUBAI|\bFZ\b/i.test(text)) extractedAirline = 'flydubai';
+      else if (/EMIRATES|\bEK\b/i.test(text)) extractedAirline = 'Emirates';
+      else if (/SAUDIA|SAUDI ARABIAN|\bSV\b/i.test(text)) extractedAirline = 'Saudia';
+      else if (/QATAR|\bQR\b/i.test(text)) extractedAirline = 'Qatar Airways';
+      else if (/GULF AIR|\bGF\b/i.test(text)) extractedAirline = 'Gulf Air';
+      else if (/KUWAIT|\bKU\b/i.test(text)) extractedAirline = 'Kuwait Airways';
+      else if (/JAZEERA|\bJ9\b/i.test(text)) extractedAirline = 'Jazeera Airways';
+      else if (/SALAMAIR|\bOV\b/i.test(text)) extractedAirline = 'SalamAir';
+      else if (/MALAYSIA AIRLINES|\bMH\b/i.test(text)) extractedAirline = 'Malaysia Airlines';
+      else if (/SINGAPORE AIRLINES|\bSQ\b/i.test(text)) extractedAirline = 'Singapore Airlines';
+      else if (/THAI AIRWAYS|\bTG\b/i.test(text)) extractedAirline = 'Thai Airways';
+      else if (/INDIGO|\b6E\b/i.test(text)) extractedAirline = 'IndiGo';
+    }
+
+    const normalizeAirlineName = (raw: string, list: string[]) => {
+      if (!raw) return '';
+      const trimmed = raw.trim();
+      const listMatch = list.find(a => a.toLowerCase() === trimmed.toLowerCase());
+      if (listMatch) return listMatch;
+      const subMatch = list.find(a => a.toLowerCase().includes(trimmed.toLowerCase()) || trimmed.toLowerCase().includes(a.toLowerCase()));
+      if (subMatch) return subMatch;
+      return trimmed.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    };
+
+    if (extractedAirline) {
+      newData.airline = normalizeAirlineName(extractedAirline, airlineList);
+    } else {
+      const flightMatch = text.match(/\b([A-Z0-9]{2})\s*\d{3,4}\b/);
+      if (flightMatch) {
+        const code = flightMatch[1].toUpperCase();
+        if (code === 'CX') newData.airline = 'Cathay Pacific';
+        else if (code === 'BG') newData.airline = 'Biman Bangladesh Airlines';
+        else if (code === 'BS') newData.airline = 'US-Bangla Airlines';
+        else if (code === 'G9') newData.airline = 'Air Arabia';
+        else if (code === 'FZ') newData.airline = 'flydubai';
+        else if (code === 'EK') newData.airline = 'Emirates';
+        else if (code === 'SV') newData.airline = 'Saudi Airlines (Saudia)';
+        else if (code === 'QR') newData.airline = 'Qatar Airways';
+        else if (code === 'SQ') newData.airline = 'Singapore Airlines';
+        else if (code === 'MH') newData.airline = 'Malaysia Airlines';
+        else if (code === 'TG') newData.airline = 'Thai Airways';
+        else if (code === '6E') newData.airline = 'IndiGo';
+      }
+    }
+
+    // 5. ROUTE / ORIGIN & DESTINATION
     const cityToIata: Record<string, string> = {
       'COX\'S BAZAR': 'CXB', 'COXS BAZAR': 'CXB', 'COX BAZAR': 'CXB',
       'CHITTAGONG': 'CGP', 'CHATOGRAM': 'CGP', 'CHATTOGRAM': 'CGP',
       'SYLHET': 'ZYL', 'SAIDPUR': 'SPD', 'JESSORE': 'JSR', 'JASHORE': 'JSR',
       'RAJSHAHI': 'RJH', 'BARISAL': 'BZL', 'BARISHAL': 'BZL',
+      'HONG KONG': 'HKG', 'SEOUL': 'ICN', 'INCHEON': 'ICN',
       'JEDDAH': 'JED', 'MADINAH': 'MED', 'MEDINA': 'MED', 'RIYADH': 'RUH',
       'DUBAI': 'DXB', 'SHARJAH': 'SHJ', 'ABU DHABI': 'AUH',
       'KUALA LUMPUR': 'KUL', 'SINGAPORE': 'SIN', 'BANGKOK': 'BKK',
@@ -503,42 +569,59 @@ export function IndividualTicketPage() {
       }
     }
 
-    // 6. TRAVEL DATE (e.g. "15 AUG 2026", "15-08-2026", "15/08/2026")
+    // 6. TRAVEL DATE (Flight Schedule Date vs Ticket Issue Date)
     const monthNames: Record<string, string> = {
       JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
       JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
     };
 
-    const dateMatch = 
-      text.match(/(?:DATE|TRAVEL DATE|DEPARTURE DATE|FLIGHT DATE)\s*:?\s*(\d{1,2})[-\s/]([A-Z]{3})[-\s/](\d{2,4})/i) ||
-      text.match(/\b(\d{1,2})\s*([A-Z]{3})\s*(\d{4})\b/i) ||
-      text.match(/\b(\d{1,2})[-\s/]([A-Z]{3})[-\s/](\d{2})\b/i) ||
-      text.match(/\b(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})\b/) ||
-      text.match(/\b(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{4})\b/);
+    let issueYear = '2026';
+    const issueDateMatch = text.match(/(?:DATE|ISSUED)\s*[:#\s]*\s*\d{1,2}\s+[A-Z]{3}\s+(\d{4})/i);
+    if (issueDateMatch) issueYear = issueDateMatch[1];
 
-    if (dateMatch) {
-      if (monthNames[dateMatch[2]?.toUpperCase()]) {
-        const day = dateMatch[1].padStart(2, '0');
-        const month = monthNames[dateMatch[2].toUpperCase()];
-        let year = dateMatch[3];
-        if (year.length === 2) year = `20${year}`;
-        newData.travel_date = `${year}-${month}-${day}`;
-      } else if (dateMatch[1].length === 4) {
-        newData.travel_date = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
-      } else if (dateMatch[3]?.length === 4) {
-        newData.travel_date = `${dateMatch[3]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
+    const flightTableMatch = text.match(/\b(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i);
+    if (flightTableMatch) {
+      const day = flightTableMatch[1].padStart(2, '0');
+      const month = monthNames[flightTableMatch[2].toUpperCase()];
+      newData.travel_date = issueYear + '-' + month + '-' + day;
+    } else {
+      const dateMatch = 
+        text.match(/(?:TRAVEL DATE|DEPARTURE DATE|FLIGHT DATE)\s*[:#\s]*\s*(\d{1,2})[-\s/]([A-Z]{3})[-\s/](\d{2,4})/i) ||
+        text.match(/\b(\d{1,2})\s*([A-Z]{3})\s*(\d{4})\b/i) ||
+        text.match(/\b(\d{1,2})[-\s/]([A-Z]{3})[-\s/](\d{2})\b/i) ||
+        text.match(/\b(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})\b/) ||
+        text.match(/\b(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{4})\b/);
+
+      if (dateMatch) {
+        if (monthNames[dateMatch[2]?.toUpperCase()]) {
+          const day = dateMatch[1].padStart(2, '0');
+          const month = monthNames[dateMatch[2].toUpperCase()];
+          let year = dateMatch[3] || issueYear;
+          if (year.length === 2) year = '20' + year;
+          newData.travel_date = year + '-' + month + '-' + day;
+        } else if (dateMatch[1].length === 4) {
+          newData.travel_date = dateMatch[1] + '-' + dateMatch[2].padStart(2, '0') + '-' + dateMatch[3].padStart(2, '0');
+        } else if (dateMatch[3]?.length === 4) {
+          newData.travel_date = dateMatch[3] + '-' + dateMatch[2].padStart(2, '0') + '-' + dateMatch[1].padStart(2, '0');
+        }
       }
     }
 
-    // 7. TOTAL & BASE FARES
+    // 7. TOTAL & BASE FARES (Prioritizes BDT Equivalent / Equiv Fare Paid)
     const fareMatch = 
-      text.match(/(?:BASE FARE|EQUIV FARE|FARE AMOUNT|FARE)\s*:?\s*(?:BDT|USD)?\s*([\d,]+)/i);
+      text.match(/(?:EQUIV FARE(?:\s+PAID)?|EQUIV FARE AMOUNT|BASE FARE(?:\s+TOTAL)?(?:\s+AMOUNT)?)\s*[:#\s]*\s*(?:BDT|USD)?\s*([\d,]+(?:\.\d+)?)/i) ||
+      text.match(/(?:AIR FARE|FARE AMOUNT)\s*[:#\s]*\s*(?:BDT|USD)?\s*([\d,]+(?:\.\d+)?)/i);
     
     const totalMatch = 
-      text.match(/(?:TOTAL FARE|TOTAL AMOUNT|GRAND TOTAL|TOTAL)\s*:?\s*(?:BDT|USD)?\s*([\d,]+)/i) ||
+      text.match(/(?:TOTAL(?:\s+TICKET)?\s+FARE(?:\s+AMOUNT)?|TOTAL\s+AMOUNT|GRAND\s+TOTAL|\bTOTAL\b)\s*[:#\s]*\s*(?:BDT|USD)?\s*([\d,]+(?:\.\d+)?)/i) ||
       text.match(/BDT\s*([\d,]{4,8})/i);
 
-    if (totalMatch) {
+    if (totalMatch && fareMatch) {
+      const totalVal = parseInt(totalMatch[1].replace(/,/g, ''));
+      const fareVal = parseInt(fareMatch[1].replace(/,/g, ''));
+      if (totalVal > 0) newData.total_fare_input = totalVal;
+      if (fareVal > 0) newData.base_fare = fareVal;
+    } else if (totalMatch) {
       const totalVal = parseInt(totalMatch[1].replace(/,/g, ''));
       if (totalVal > 0) {
         newData.total_fare_input = totalVal;
@@ -557,35 +640,45 @@ export function IndividualTicketPage() {
       }
     }
 
-    // 8. TAX BREAKDOWN (Domestic & International Codes)
-    const utMatch = text.match(/UT\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*UT/i);
-    if (utMatch) newData.ut = parseInt(utMatch[1].replace(/,/g, ''));
+    // 8. TAX BREAKDOWN (Domestic & International Tax Codes)
+    const extractTax = (code: string): number => {
+      const p1 = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*${code}\\b`, 'i');
+      const p2 = new RegExp(`\\b${code}\\b\\s*[:#\\s]*\\s*([\\d,]+(?:\\.\\d+)?)`, 'i');
+      const m1 = text.match(p1);
+      if (m1) return parseInt(m1[1].replace(/,/g, ''));
+      const m2 = text.match(p2);
+      if (m2) return parseInt(m2[1].replace(/,/g, ''));
+      return 0;
+    };
 
-    const bdMatch = text.match(/BD\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*BD/i);
-    if (bdMatch) newData.bd = parseInt(bdMatch[1].replace(/,/g, ''));
+    newData.ut = extractTax('UT');
+    newData.bd = extractTax('BD');
+    newData.e5 = extractTax('E5');
+    newData.ow = extractTax('OW');
+    newData.p7 = extractTax('P7');
+    newData.p8 = extractTax('P8');
+    newData.e7 = extractTax('E7');
+    newData.g8 = extractTax('G8');
+    newData.ts = extractTax('TS');
 
-    const e5Match = text.match(/E5\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*E5/i);
-    if (e5Match) newData.e5 = parseInt(e5Match[1].replace(/,/g, ''));
+    // Extract extra/unrecognized taxes into custom_taxes (e.g. 1101G3, 1023I5)
+    const taxBlockMatch = text.match(/(?:TAX|XT)\s*[:#\s]*\s*([\s\S]+?)(?=\s*(?:TOTAL|GRAND TOTAL|FLIGHT|SOURCE|\r\n\r\n|$))/i);
+    const taxBlockText = taxBlockMatch ? taxBlockMatch[1] : text;
 
-    const owMatch = text.match(/OW\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*OW/i);
-    if (owMatch) newData.ow = parseInt(owMatch[1].replace(/,/g, ''));
+    const customTaxes: { code: string; amount: number }[] = [];
+    const knownCodes = ['BD', 'E5', 'OW', 'P7', 'P8', 'UT', 'E7', 'G8', 'TS', 'USD', 'BDT', 'NUC', 'END', 'ROE', 'KG', 'CO2', 'MR', 'MS', 'PC', 'ST', 'CL', 'OK', 'NO'];
+    const taxMatches = [...taxBlockText.matchAll(/\b([\d,]+(?:\.\d+)?)\s*([A-Z0-9]{2})\b/gi)];
+    for (const tm of taxMatches) {
+      const amt = parseInt(tm[1].replace(/,/g, ''));
+      const code = tm[2].toUpperCase();
+      if (amt > 10 && !knownCodes.includes(code) && !/^\d+$/.test(code)) {
+        if (!customTaxes.some(t => t.code === code)) {
+          customTaxes.push({ code, amount: amt });
+        }
+      }
+    }
+    newData.custom_taxes = customTaxes;
 
-    const p7Match = text.match(/P7\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*P7/i);
-    if (p7Match) newData.p7 = parseInt(p7Match[1].replace(/,/g, ''));
-
-    const p8Match = text.match(/P8\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*P8/i);
-    if (p8Match) newData.p8 = parseInt(p8Match[1].replace(/,/g, ''));
-
-    const e7Match = text.match(/E7\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*E7/i);
-    if (e7Match) newData.e7 = parseInt(e7Match[1].replace(/,/g, ''));
-
-    const g8Match = text.match(/G8\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*G8/i);
-    if (g8Match) newData.g8 = parseInt(g8Match[1].replace(/,/g, ''));
-
-    const tsMatch = text.match(/TS\s*:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*TS/i);
-    if (tsMatch) newData.ts = parseInt(tsMatch[1].replace(/,/g, ''));
-
-    // Check if origin or destination is non-BD to auto-set international
     if (newData.origin !== 'DAC' || (newData.destination && !['CXB', 'CGP', 'ZYL', 'SPD', 'JSR', 'RJH', 'BZL'].includes(newData.destination))) {
       newData.ticket_category = 'international';
     }
@@ -600,7 +693,7 @@ export function IndividualTicketPage() {
     setShowForm(true);
     setSuccess('Data parsed from GDS successfully! Please verify extracted fields.');
   };
-  
+
   const parseWithAI = async () => {
     setImportError('');
     const text = gdsText.trim();
@@ -616,25 +709,25 @@ export function IndividualTicketPage() {
         throw new Error("Google AI API Key (VITE_GEMINI_API_KEY) not found in configuration.");
       }
 
-      const prompt = `You are an expert aviation ticket parser for travel agencies in Bangladesh and worldwide. Analyze the following e-Ticket / GDS report text (from US-Bangla Airlines, Biman Bangladesh, Air Arabia, flydubai, Saudia, Emirates, Amadeus, Sabre, Galileo, etc.) and extract an array of passenger ticket objects.
+      const prompt = `You are an expert aviation ticket parser for travel agencies in Bangladesh and worldwide. Analyze the following e-Ticket / GDS report text (from Cathay Pacific, US-Bangla Airlines, Biman Bangladesh, Air Arabia, flydubai, Saudia, Emirates, Amadeus, Sabre, Galileo, etc.) and extract an array of passenger ticket objects.
 
 REQUIRED JSON FIELD SPECIFICATIONS:
-1. "passenger_name": Full passenger name (e.g. "HASAN / MD NASARUL" or "MD NASARUL HASAN"). NEVER output dictionary words or headers.
-2. "pnr": 6-character booking reference / PNR code (e.g. "K9X2P4" or "A1B2C3"). Strip any airline prefix like "BS/".
-3. "ticket_number": 10 to 14 digit e-ticket number (e.g. "6102416456211"). Digits only.
-4. "airline": Operating airline name (e.g. "US-Bangla Airlines", "Biman Bangladesh Airlines", "Air Arabia", "flydubai", "Emirates", "Saudia", "Qatar Airways").
-5. "origin": 3-letter IATA origin airport code (e.g. "DAC", "CGP", "ZYL"). Default to "DAC" if departing Bangladesh.
-6. "destination": 3-letter IATA destination airport code (e.g. "CXB", "CGP", "ZYL", "SPD", "JSR", "JED", "MED", "DXB", "KUL", "SIN", "BKK", "DOH", "AUH").
-7. "travel_date": Date of flight formatted as YYYY-MM-DD (e.g. "2026-08-15").
-8. "base_fare": Base airfare amount as a number.
-9. "total_fare": Total price paid as a number.
-10. "ut_tax", "bd_tax", "e5_tax", "ow_tax", "p7_tax", "p8_tax", "e7_tax", "g8_tax", "ts_tax": Specific tax breakdown numbers if mentioned.
+1. "passenger_name": Full passenger name (e.g. "NOBEN/INMUR RASHID MR" or "MD NASARUL HASAN"). Look for "NAME:" or "PASSENGER NAME:". NEVER output document headers like "ELECTRONIC TICKET" or "ITINERARY RECEIPT".
+2. "pnr": 6-character booking reference / PNR code (e.g. "9XEUBG" or "K9X2P4"). Strip any prefix like "AMADEUS:".
+3. "ticket_number": 10 to 14 digit e-ticket number (e.g. "1604833304579" or "6102416456211"). Digits only.
+4. "airline": Operating or Issuing airline name (e.g. "Cathay Pacific", "US-Bangla Airlines", "Biman Bangladesh Airlines", "Air Arabia", "flydubai", "Emirates", "Saudia", "Qatar Airways"). Look for "ISSUING AIRLINE:".
+5. "origin": 3-letter IATA origin airport code (e.g. "DAC", "CGP", "ZYL").
+6. "destination": 3-letter IATA destination airport code (e.g. "HKG", "ICN", "CXB", "CGP", "ZYL", "JED", "MED", "DXB", "KUL", "SIN", "BKK", "DOH").
+7. "travel_date": Flight travel/departure date formatted as YYYY-MM-DD (e.g. "2026-08-28" for "28AUG"). Combine day-month with ticket issue year (e.g. 2026).
+8. "base_fare": Base airfare amount in BDT as a number. Prioritize "EQUIV FARE PAID" or "EQUIV FARE" in BDT over USD airfare.
+9. "total_fare": Total ticket price in BDT as a number (e.g. "62137").
+10. "ut_tax", "bd_tax", "e5_tax", "ow_tax", "p7_tax", "p8_tax", "e7_tax", "g8_tax", "ts_tax": Specific tax breakdown numbers if mentioned (e.g. "500BD" -> bd_tax: 500, "446E5" -> e5_tax: 446, "2500OW" -> ow_tax: 2500, "1234P7" -> p7_tax: 1234, "1234P8" -> p8_tax: 1234, "6000UT" -> ut_tax: 6000).
 11. "ticket_category": "domestic" or "international".
-12. "extra_info": Array of key-value objects for baggage, class, meal, etc.
+12. "extra_info": Array of key-value objects for baggage, class, meal, or custom tax codes like G3 (1101) and I5 (1023).
 
 Text to parse:
 """
-${text}
+` + text + `
 """
 
 Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown syntax.`;
@@ -715,23 +808,20 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           pnr: p.pnr || '',
           airline: p.airline || '',
           origin: p.origin || 'DAC',
-          destination: p.destination || '',
+          destination: p.destination || 'CXB',
           travel_date: p.travel_date || '',
-          base_fare: p.base_fare || 0,
-          total_fare_input: p.total_fare || 0,
-          ut: p.ut_tax || 0,
-          bd: p.bd_tax || 0,
-          e5: p.e5_tax || 0,
-          ow: p.ow_tax || 0,
-          p7: p.p7_tax || 0,
-          p8: p.p8_tax || 0,
-          e7: p.e7_tax || 0,
-          g8: p.g8_tax || 0,
-          ts: p.ts_tax || 0,
-          metadata: p.extra_info || [
-            { key: 'Baggage', value: '30 KG' },
-            { key: 'Value', value: '' }
-          ]
+          base_fare: Number(p.base_fare) || 0,
+          total_fare_input: Number(p.total_fare) || 0,
+          ut: Number(p.ut_tax) || 0,
+          bd: Number(p.bd_tax) || 0,
+          e5: Number(p.e5_tax) || 0,
+          ow: Number(p.ow_tax) || 0,
+          p7: Number(p.p7_tax) || 0,
+          p8: Number(p.p8_tax) || 0,
+          e7: Number(p.e7_tax) || 0,
+          g8: Number(p.g8_tax) || 0,
+          ts: Number(p.ts_tax) || 0,
+          metadata: Array.isArray(p.extra_info) ? p.extra_info : []
         }));
 
         setForms(newForms);
@@ -895,8 +985,8 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
       </div>
 
       {/* Issue Ticket Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Issue New Air Ticket" size="xl">
-        <div className="p-5 flex flex-col gap-4">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Issue Air Ticket (Retail & Multi-Passenger)" size="xl">
+        <div className="space-y-3 max-h-[82vh] overflow-y-auto pr-1">
           
           {/* Sticky Top Header: Multi-Passenger Tabs & Clone Options */}
           <div className="sticky top-0 bg-white z-10 pt-1 pb-2 border-b border-neutral-200 flex items-center justify-between overflow-x-auto gap-2">
@@ -944,10 +1034,10 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             </div>
           )}
 
-          {/* Ticket Type / Category Selector */}
-          <div className="bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 flex items-center justify-between">
+          {/* Top Bar: Ticket Category & PNR Quick Badge */}
+          <div className="bg-gradient-to-r from-neutral-50 via-primary-50/20 to-neutral-50 p-2.5 rounded-xl border border-neutral-200 flex items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-neutral-700">Ticket Type:</span>
+              <span className="text-xs font-bold text-neutral-700">Ticket Category:</span>
               <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
                 <input
                   type="radio"
@@ -969,86 +1059,101 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                 ✈️ International (আন্তর্জাতিক)
               </label>
             </div>
-            <span className="text-[10px] text-neutral-400 font-medium">
-              {form.ticket_category === 'international' ? 'Full International Tax Breakdown Enabled' : 'Standard Domestic Taxes'}
-            </span>
-          </div>
-
-          {/* Row 1: Passenger & Route Information */}
-          <div className="grid grid-cols-12 gap-3">
-            <div className="col-span-3">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passenger Name *</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport" />
-            </div>
-            <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passport</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} placeholder="Passport No." />
-            </div>
-            <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">PNR *</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase font-bold text-primary-700" value={form.pnr} onChange={e => updateActiveForm('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
-            </div>
-            <div className="col-span-3">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ticket Number</label>
-              <input className="input-field py-1.5 px-2.5 text-xs font-mono font-semibold" value={form.ticket_number || ''} onChange={e => updateActiveForm('ticket_number', e.target.value)} placeholder="13-digit Ticket No." />
-            </div>
-            <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Source / Vendor</label>
-              <select className="input-field py-1.5 px-2.5 text-xs" value={form.supplier_id} onChange={e => updateActiveForm('supplier_id', e.target.value)}>
-                <option value="">Direct / GDS</option>
-                {suppliers.map(s => (
-                  <option key={s.id} value={s.id}>{s.company_name}</option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-neutral-500">PNR Badge:</span>
+              <span className="text-xs font-mono font-bold text-primary-700 bg-primary-100/80 px-2.5 py-0.5 rounded-md border border-primary-300">
+                {form.pnr || 'NOT SET'}
+              </span>
             </div>
           </div>
 
-          {/* Row 2: Flight Details */}
-          <div className="grid grid-cols-12 gap-3">
-            <div className="col-span-3">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Airline *</label>
-              <select className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.airline} onChange={e => updateActiveForm('airline', e.target.value)}>
-                <option value="">Select airline</option>
-                {airlineList.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+          {/* Section 1: Passenger & Reservation Information */}
+          <div className="card p-3 border border-neutral-200 bg-white space-y-2.5 shadow-xs">
+            <div className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider border-b border-neutral-100 pb-1 flex items-center gap-1.5">
+              <span>👤 Passenger & Reservation Information</span>
             </div>
-            <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Origin</label>
-              <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold" value={form.origin} onChange={e => updateActiveForm('origin', e.target.value)}>
-                {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Destination</label>
-              <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold" value={form.destination} onChange={e => updateActiveForm('destination', e.target.value)}>
-                <option value="">Select</option>
-                {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Travel Date *</label>
-              <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.travel_date} onChange={e => updateActiveForm('travel_date', e.target.value)} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Return Date</label>
-              <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.return_date} onChange={e => updateActiveForm('return_date', e.target.value)} />
-            </div>
-            <div className="col-span-1">
-              <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Class</label>
-              <select className="input-field py-1.5 px-2.5 text-xs capitalize" value={form.cabin_class} onChange={e => updateActiveForm('cabin_class', e.target.value)}>
-                <option value="economy">Economy</option>
-                <option value="premium_economy">Prem. Eco</option>
-                <option value="business">Business</option>
-                <option value="first">First</option>
-              </select>
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-12 sm:col-span-4">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passenger Name *</label>
+                <input className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport / ticket" />
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">PNR Code *</label>
+                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase font-bold text-primary-700" value={form.pnr} onChange={e => updateActiveForm('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
+              </div>
+              <div className="col-span-6 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ticket Number</label>
+                <input className="input-field py-1.5 px-2.5 text-xs font-mono font-semibold" value={form.ticket_number || ''} onChange={e => updateActiveForm('ticket_number', e.target.value)} placeholder="13-digit Ticket No." />
+              </div>
+              <div className="col-span-6 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passport Number</label>
+                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} placeholder="Passport No." />
+              </div>
             </div>
           </div>
 
-          {/* Row 3: Fare & Base Financials */}
-          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200 space-y-3">
-            <div className="flex justify-between items-center border-b border-neutral-200 pb-1.5">
-              <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Fare & Commission Inputs</span>
-              <span className="text-[10px] text-neutral-500 font-semibold">Enter Base & Total Fare or Tax Breakdown</span>
+          {/* Section 2: Flight Route & Schedule Information */}
+          <div className="card p-3 border border-neutral-200 bg-white space-y-2.5 shadow-xs">
+            <div className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider border-b border-neutral-100 pb-1 flex items-center gap-1.5">
+              <span>✈️ Flight Route & Schedule Details</span>
+            </div>
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-12 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Operating Airline *</label>
+                <select className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.airline} onChange={e => updateActiveForm('airline', e.target.value)}>
+                  <option value="">Select airline</option>
+                  {airlineList.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Origin (Default DAC) *</label>
+                <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold text-primary-700" value={form.origin || 'DAC'} onChange={e => updateActiveForm('origin', e.target.value)}>
+                  {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code} - {ap.city}</option>)}
+                </select>
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Destination *</label>
+                <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold text-primary-700" value={form.destination} onChange={e => updateActiveForm('destination', e.target.value)}>
+                  <option value="">Select Dest.</option>
+                  {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code} - {ap.city}</option>)}
+                </select>
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Travel Date *</label>
+                <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.travel_date} onChange={e => updateActiveForm('travel_date', e.target.value)} />
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Return Date</label>
+                <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.return_date} onChange={e => updateActiveForm('return_date', e.target.value)} />
+              </div>
+              <div className="col-span-12 sm:col-span-1">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Class</label>
+                <select className="input-field py-1.5 px-2.5 text-xs capitalize" value={form.cabin_class} onChange={e => updateActiveForm('cabin_class', e.target.value)}>
+                  <option value="economy">Eco</option>
+                  <option value="premium_economy">Prem</option>
+                  <option value="business">Biz</option>
+                  <option value="first">First</option>
+                </select>
+              </div>
+            </div>
+            <div className="pt-1 flex items-center justify-between text-xs border-t border-neutral-50">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-semibold text-neutral-500 block">Supplier / Vendor Source:</label>
+                <select className="input-field py-1 px-2 text-xs w-48 font-medium" value={form.supplier_id} onChange={e => updateActiveForm('supplier_id', e.target.value)}>
+                  <option value="">Direct / GDS / Self</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>{s.company_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Financial Fares & Commission Inputs */}
+          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200 space-y-2 shadow-xs">
+            <div className="flex justify-between items-center border-b border-neutral-200 pb-1">
+              <span className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider">💰 Base Financials & Commission</span>
+              <span className="text-[10px] text-neutral-500 font-semibold">Enter Base & Total Ticket Fare</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -1071,10 +1176,10 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             </div>
           </div>
 
-          {/* Row 4: Tax Breakdown Grid (Domestic & International Codes) */}
-          <div className="card p-3 border border-neutral-200 space-y-2 bg-white">
+          {/* Section 4: Itemized Tax Breakdown Grid */}
+          <div className="card p-3 border border-neutral-200 space-y-2 bg-white shadow-xs">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-1.5">
-              <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1">
+              <span className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1">
                 💸 Itemized Tax Breakdown {form.ticket_category === 'international' ? '(BD, E5, OW, P7, P8, UT, E7, G8, TS)' : '(BD, UT, E5)'}
               </span>
               <button
@@ -1165,10 +1270,10 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             )}
           </div>
           
-          {/* Dynamic Custom Fields / Baggage & Value */}
-          <div className="bg-white border rounded-xl p-3">
+          {/* Section 5: Baggage & Extra Info */}
+          <div className="bg-white border border-neutral-200 rounded-xl p-3 shadow-xs">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-[11px] font-bold text-neutral-600 uppercase">Additional Info (Dynamic Fields: Baggage & Value)</h3>
+              <h3 className="text-[11px] font-bold text-neutral-600 uppercase">Dynamic Fields (Baggage, Meal & Extra Specs)</h3>
               <button onClick={addMetadataField} className="text-[11px] text-primary-600 font-semibold flex items-center gap-1 hover:underline">
                 <Plus size={12} /> Add Custom Field
               </button>
@@ -1200,9 +1305,9 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             ))}
           </div>
 
-          {/* Row 5: Calculations & Financial Totals */}
+          {/* Section 6: Calculation Results & Financial Totals */}
           <div className="flex justify-between items-end mb-1 mt-1">
-             <h3 className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider">Calculation Results & Financials</h3>
+             <h3 className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider">Calculation Results & Financial Totals</h3>
              <button 
                 onClick={handleRecalculate}
                 disabled={!currentNeedsRecalc}
