@@ -346,20 +346,18 @@ export function HotelDirectoryPage() {
         {filteredHotels.map(hotel => (
           <div key={hotel.id} className="card p-5 hover:shadow-lg transition-all border border-neutral-100 flex flex-col justify-between group">
             <div>
-              <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-start justify-between gap-2 mb-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-heading font-bold text-neutral-800 text-base group-hover:text-primary-600 transition-colors">
-                      {hotel.hotel_name}
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-neutral-500 mt-0.5">
+                  <h3 className="font-heading font-bold text-neutral-800 text-lg group-hover:text-primary-600 transition-colors leading-tight">
+                    {hotel.hotel_name}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs text-neutral-500 mt-1">
                     <MapPin size={13} className="text-primary-500 shrink-0" />
                     <span className="font-semibold text-neutral-700">{hotel.city}</span>, {hotel.country}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-0.5 bg-gold-50 border border-gold-200 px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-0.5 bg-gold-50/50 border border-gold-200/50 px-2 py-1 rounded-full shrink-0">
                   {Array.from({ length: hotel.star_rating }).map((_, i) => (
                     <Star key={i} size={11} className="text-gold-500 fill-gold-500" />
                   ))}
@@ -367,64 +365,39 @@ export function HotelDirectoryPage() {
               </div>
 
               {hotel.distance_to_landmark && (
-                <div className="mt-2 text-xs bg-primary-50 text-primary-800 px-2.5 py-1 rounded-md inline-block font-medium border border-primary-100">
-                  📍 {hotel.distance_to_landmark}
+                <div className="text-xs bg-primary-50/70 text-primary-800 px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 font-medium border border-primary-100/50">
+                  <Sparkles size={12} className="text-primary-600" /> {hotel.distance_to_landmark}
                 </div>
               )}
 
-              {hotel.address && (
-                <p className="text-xs text-neutral-500 mt-2 line-clamp-2 leading-relaxed">
-                  {hotel.address}
-                </p>
-              )}
-
-              {/* Contact Info */}
-              <div className="mt-3 pt-3 border-t border-neutral-100 space-y-1 text-xs">
-                {hotel.contact_person && (
-                  <div className="text-neutral-700 font-medium">
-                    Contact: <span className="text-neutral-900 font-bold">{hotel.contact_person}</span>
-                  </div>
-                )}
-                {hotel.contact_phone && (
-                  <div className="flex items-center gap-1.5 text-neutral-500">
-                    <Phone size={12} className="text-neutral-400" /> {hotel.contact_phone}
-                  </div>
-                )}
-                {hotel.contact_email && (
-                  <div className="flex items-center gap-1.5 text-neutral-500 truncate">
-                    <Mail size={12} className="text-neutral-400 shrink-0" /> {hotel.contact_email}
+              {/* Contact Info (Compact) */}
+              <div className="mt-4 pt-4 border-t border-neutral-100 space-y-2">
+                {(hotel.contact_person || hotel.contact_phone) && (
+                  <div className="flex items-center justify-between text-[11px] bg-neutral-50/50 px-3 py-2 rounded-lg border border-neutral-100">
+                    <div className="flex items-center gap-1.5 text-neutral-700">
+                       <span className="font-bold text-neutral-900">{hotel.contact_person || 'No Contact Person'}</span>
+                    </div>
+                    {hotel.contact_phone && (
+                       <div className="flex items-center gap-1 text-primary-700 font-mono font-bold bg-white px-2 py-0.5 rounded shadow-sm border border-neutral-100">
+                         <Phone size={10} /> {hotel.contact_phone}
+                       </div>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Amenities */}
               {hotel.amenities && hotel.amenities.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {hotel.amenities.slice(0, 4).map((amenity, idx) => (
-                    <span key={idx} className="text-[10px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded font-medium">
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {hotel.amenities.slice(0, 3).map((amenity, idx) => (
+                    <span key={idx} className="text-[10px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded-md font-medium border border-neutral-200/50">
                       {amenity}
                     </span>
                   ))}
-                  {hotel.amenities.length > 4 && (
-                    <span className="text-[10px] bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-bold">
-                      +{hotel.amenities.length - 4}
+                  {hotel.amenities.length > 3 && (
+                    <span className="text-[10px] bg-neutral-50 text-neutral-400 px-2 py-0.5 rounded-md font-bold border border-neutral-100">
+                      +{hotel.amenities.length - 3}
                     </span>
-                  )}
-                </div>
-              )}
-
-              {/* Rules & Cancellation preview */}
-              {(hotel.hotel_rules || hotel.cancellation_policy) && (
-                <div className="mt-3 pt-2 border-t border-dashed border-neutral-100 space-y-1 text-[11px]">
-                  {hotel.hotel_rules && (
-                    <div className="text-neutral-600 truncate" title={hotel.hotel_rules}>
-                      📜 <span className="font-semibold">Rules:</span> {hotel.hotel_rules}
-                    </div>
-                  )}
-                  {hotel.cancellation_policy && (
-                    <div className="text-rose-700 truncate" title={hotel.cancellation_policy}>
-                      ⚠️ <span className="font-semibold">Cancellation:</span> {hotel.cancellation_policy}
-                    </div>
                   )}
                 </div>
               )}
@@ -461,7 +434,7 @@ export function HotelDirectoryPage() {
 
       {/* Add / Edit Hotel Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingHotel ? 'Edit Hotel Info' : 'Add New Hotel'} size="lg">
-        <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
+        <div className="p-5 space-y-4">
           {error && (
             <div className="flex gap-2 p-3 bg-error-50 border border-error-200 text-error-700 rounded-lg text-sm">
               <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}

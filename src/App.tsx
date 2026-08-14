@@ -20,6 +20,7 @@ import { ToursPage } from './pages/tours/ToursPage';
 import { TourBookingsPage } from './pages/tours/TourBookingsPage';
 import { HotelBookingsPage } from './pages/hotels/HotelBookingsPage';
 import { HotelDirectoryPage } from './pages/hotels/HotelDirectoryPage';
+import { HotelSettingsPage } from './pages/hotels/HotelSettingsPage';
 import { CustomersPage } from './pages/crm/CustomersPage';
 import { LeadsPage } from './pages/crm/LeadsPage';
 import { SMSCampaignPage } from './pages/crm/SMSCampaignPage';
@@ -54,6 +55,7 @@ const moduleTitles: Record<ActiveModule, { title: string; subtitle?: string }> =
   'tickets-setup': { title: 'Flight Master Setup', subtitle: 'Manage airlines and destinations' },
   'hotels-bookings': { title: 'Hotel Bookings', subtitle: 'Hotel reservation & voucher management' },
   'hotels-directory': { title: 'Hotel Directory & Info', subtitle: 'Partner hotel directory & room rates' },
+  'hotels-settings': { title: 'Hotel Settings', subtitle: 'Manage Room Categories & Meal Plans' },
   'umrah-packages': { title: 'Umrah Packages', subtitle: 'Package management' },
   'umrah-groups': { title: 'Umrah Groups', subtitle: 'Group travel management' },
   'umrah-pilgrims': { title: 'Umrah Pilgrims', subtitle: 'Pilgrim registration & tracking' },
@@ -125,6 +127,7 @@ function AppContent() {
       case 'tickets-setup': return <FlightSetupPage />;
       case 'hotels-bookings': return <HotelBookingsPage />;
       case 'hotels-directory': return <HotelDirectoryPage />;
+      case 'hotels-settings': return <HotelSettingsPage />;
       case 'umrah-packages': return <UmrahPackagesPage />;
       case 'umrah-groups': return <UmrahGroupsPage />;
       case 'umrah-pilgrims': return <UmrahPilgrimsPage />;

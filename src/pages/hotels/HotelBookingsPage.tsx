@@ -154,6 +154,7 @@ const emptyBookingForm = {
   special_requests: '',
   hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Original Passport / NID required at check-in. Non-smoking room.',
   cancellation_policy: 'Free cancellation up to 72 hours before check-in. 1 night fee applies afterwards.',
+  guests: [] as { id: string; name: string; age_group: string; room_no: string }[],
 };
 
 export function HotelBookingsPage() {
@@ -172,6 +173,7 @@ export function HotelBookingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [activeTab, setActiveTab] = useState<'details' | 'guests' | 'finance'>('details');
 
   const [selectedVoucher, setSelectedVoucher] = useState<HotelBooking | null>(null);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
@@ -264,7 +266,7 @@ export function HotelBookingsPage() {
     const paid = Number(form.paid_amount) || 0;
     const profit = fare - cost;
     const refCode = form.booking_reference || editingBooking?.booking_reference || `BK-${Math.floor(10000 + Math.random() * 90000)}`;
-    const cnfCode = form.hotel_confirmation_id || editingBooking?.hotel_confirmation_id || `CNF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const cnfCode = form.hotel_confirmation_id || editingBooking?.hotel_confirmation_id || '';
 
     const payload: HotelBooking = {
       id: editingBooking ? editingBooking.id : 'hb-' + Date.now(),
@@ -281,7 +283,9 @@ export function HotelBookingsPage() {
       city: form.city,
       room_type: form.room_type,
       rooms_count: Number(form.rooms_count) || 1,
-      room_details: form.room_details,
+      room_details: form.guests && form.guests.length > 0 
+        ? `${form.room_details}\n\nGuest Assignment:\n${form.guests.map((g: any) => `${g.name} (${g.age_group}) ➔ ${g.room_no}`).join('\n')}`
+        : form.room_details,
       check_in_date: form.check_in_date,
       check_out_date: form.check_out_date,
       total_nights: nights,
@@ -359,9 +363,11 @@ export function HotelBookingsPage() {
       special_requests: booking.special_requests || '',
       hotel_rules: booking.hotel_rules || '',
       cancellation_policy: booking.cancellation_policy || '',
+      guests: [],
     });
     setShowForm(true);
     setError('');
+    setActiveTab('details');
   };
 
   const handleDelete = async (id: string) => {
@@ -381,6 +387,31 @@ export function HotelBookingsPage() {
   };
 
   const f = (field: string, val: any) => setForm(prev => ({ ...prev, [field]: val }));
+
+  const handleGuestsUpdate = (newGuests: any[]) => {
+    const adults = newGuests.filter(g => g.age_group === 'Adult').length;
+    const children = newGuests.filter(g => g.age_group === 'Child' || g.age_group === 'Infant').length;
+    setForm(prev => ({ ...prev, guests: newGuests, adults_count: adults, children_count: children }));
+  };
+
+  const syncGuestsWithCount = (type: 'Adult' | 'Child', newCount: number) => {
+    setForm(prev => {
+      let typeGuests = (prev.guests || []).filter(g => type === 'Adult' ? g.age_group === 'Adult' : (g.age_group === 'Child' || g.age_group === 'Infant'));
+      const otherGuests = (prev.guests || []).filter(g => type === 'Adult' ? g.age_group !== 'Adult' : (g.age_group === 'Adult'));
+      
+      if (newCount > typeGuests.length) {
+        const diff = newCount - typeGuests.length;
+        for (let i = 0; i < diff; i++) {
+          typeGuests.push({ id: Date.now().toString() + Math.random(), name: '', age_group: type, room_no: 'Room 1' });
+        }
+      } else if (newCount < typeGuests.length) {
+        typeGuests = typeGuests.slice(0, newCount);
+      }
+      
+      const newGuests = type === 'Adult' ? [...typeGuests, ...otherGuests] : [...otherGuests, ...typeGuests];
+      return { ...prev, [type === 'Adult' ? 'adults_count' : 'children_count']: newCount, guests: newGuests };
+    });
+  };
 
   const filteredBookings = bookings.filter(b => {
     const matchesSearch =
@@ -414,10 +445,12 @@ export function HotelBookingsPage() {
             setForm({
               ...emptyBookingForm,
               booking_reference: `BK-${Math.floor(10000 + Math.random() * 90000)}`,
-              hotel_confirmation_id: `CNF-${Math.floor(100000 + Math.random() * 900000)}`
+              hotel_confirmation_id: '',
+              guests: [{ id: Date.now().toString(), name: '', age_group: 'Adult', room_no: 'Room 1' }]
             });
             setShowForm(true);
             setError('');
+            setActiveTab('details');
           }}
           className="btn-primary flex items-center gap-2"
         >
@@ -490,84 +523,64 @@ export function HotelBookingsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50/50">
-                <th className="table-header text-left">IDs & Guest</th>
-                <th className="table-header text-left">Hotel & Room Details</th>
-                <th className="table-header text-left">Guests & Stay</th>
-                <th className="table-header text-center">Meal & Rules</th>
-                <th className="table-header text-right">Fare & Profit</th>
-                <th className="table-header text-center">Status</th>
+                <th className="table-header text-left">Booking & Guest</th>
+                <th className="table-header text-left">Hotel & Room</th>
+                <th className="table-header text-left">Stay Details</th>
+                <th className="table-header text-right">Financials</th>
                 <th className="table-header text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-50">
               {loading && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-neutral-400 text-sm">Loading bookings...</td>
+                  <td colSpan={5} className="py-12 text-center text-neutral-400 text-sm">Loading bookings...</td>
                 </tr>
               )}
               {!loading && filteredBookings.length === 0 && (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={5}>
                     <EmptyState icon={Building2} title="No Hotel Bookings Found" description="Create a new hotel reservation for your customers." />
                   </td>
                 </tr>
               )}
               {filteredBookings.map(b => (
-                <tr key={b.id} className="hover:bg-neutral-50/50 transition-colors">
+                <tr key={b.id} className="hover:bg-neutral-50/50 transition-colors group">
                   <td className="table-cell">
-                    <div className="font-bold text-neutral-800 text-xs">{b.customer_name}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-primary-600 font-mono font-bold bg-primary-50 px-1.5 py-0.5 rounded">
-                        B-ID: {b.booking_reference}
-                      </span>
-                      {b.hotel_confirmation_id && (
-                        <span className="text-[10px] text-teal-700 font-mono font-semibold bg-teal-50 px-1.5 py-0.5 rounded">
-                          CNF: {b.hotel_confirmation_id}
-                        </span>
-                      )}
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-[10px] text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded font-mono font-bold tracking-wider">#{b.booking_reference}</span>
+                      <span className="font-bold text-neutral-800 text-xs mt-0.5">{b.customer_name}</span>
+                      <Badge variant={getStatusColor(b.status) as any} className="text-[9px] px-1.5 py-0.5 uppercase">
+                        {b.status}
+                      </Badge>
                     </div>
-                    {b.customer_phone && <div className="text-[10px] text-neutral-400 mt-0.5">📞 {b.customer_phone}</div>}
                   </td>
                   <td className="table-cell">
-                    <div className="font-semibold text-neutral-800 text-xs flex items-center gap-1">
+                    <div className="font-bold text-neutral-800 text-xs flex items-center gap-1.5">
                       <Building2 size={13} className="text-primary-500 shrink-0" /> {b.hotel_name}
                     </div>
-                    <div className="text-[10px] text-neutral-400 font-medium truncate max-w-[200px]" title={b.hotel_address}>
-                      📍 {b.city} {b.hotel_address ? `• ${b.hotel_address}` : ''}
+                    <div className="text-[10px] text-neutral-500 font-bold mt-1.5 bg-neutral-100 w-fit px-2 py-0.5 rounded-md">
+                      {b.rooms_count}x {b.room_type} • {b.meal_plan}
                     </div>
-                    {b.room_details && (
-                      <div className="text-[10px] text-neutral-500 font-medium italic mt-0.5">
-                        🛏️ {b.room_details}
-                      </div>
-                    )}
-                  </td>
-                  <td className="table-cell text-xs">
-                    <div className="font-bold text-neutral-700">
-                      👥 {b.adults_count || 1} Adult(s){b.children_count ? `, ${b.children_count} Child` : ''}
-                      {b.nationality && <span className="text-[10px] font-normal text-neutral-400 ml-1">({b.nationality})</span>}
-                    </div>
-                    <div className="text-neutral-600 mt-0.5">
-                      {formatDate(b.check_in_date)} ➔ {formatDate(b.check_out_date)}
-                    </div>
-                    <div className="text-[10px] text-neutral-400 font-bold">
-                      {b.total_nights} Night{b.total_nights > 1 ? 's' : ''}
+                    <div className="text-[10px] text-neutral-400 mt-1 flex items-center gap-1">
+                      <MapPin size={10} /> {b.city} {b.hotel_confirmation_id && `• CNF: ${b.hotel_confirmation_id}`}
                     </div>
                   </td>
-                  <td className="table-cell text-center">
-                    <span className="text-xs font-bold text-neutral-800">{b.rooms_count} x {b.room_type}</span>
-                    <div className="text-[10px] text-neutral-400">{b.meal_plan}</div>
+                  <td className="table-cell">
+                    <div className="text-xs font-semibold text-neutral-700 flex items-center gap-1.5">
+                      <Calendar size={13} className="text-neutral-400" />
+                      {formatDate(b.check_in_date)} <span className="text-[10px] text-neutral-400 font-normal">to</span> {formatDate(b.check_out_date)}
+                    </div>
+                    <div className="text-[10px] text-neutral-500 font-bold mt-1.5 flex items-center gap-2">
+                      <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">🌙 {b.total_nights} Night{b.total_nights > 1 ? 's' : ''}</span>
+                      <span className="bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded">👥 {b.adults_count} Adult(s) {b.children_count ? `& ${b.children_count} Child` : ''}</span>
+                    </div>
                   </td>
                   <td className="table-cell text-right">
-                    <div className="font-black text-xs text-neutral-900">{formatBDT(b.total_fare)}</div>
-                    <div className="text-[10px] font-bold text-success-600">Profit: {formatBDT(b.profit)}</div>
-                  </td>
-                  <td className="table-cell text-center">
-                    <Badge variant={getStatusColor(b.status) as any} className="text-[9px] px-2 py-0.5">
-                      {b.status}
-                    </Badge>
+                    <div className="font-black text-sm text-neutral-900">{formatBDT(b.total_fare)}</div>
+                    <div className="text-[10px] font-bold text-success-600 mt-0.5 bg-success-50 inline-block px-1.5 py-0.5 rounded">Profit: {formatBDT(b.profit)}</div>
                   </td>
                   <td className="table-cell text-right">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => openVoucher(b)}
                         className="p-1.5 hover:bg-primary-50 text-neutral-400 hover:text-primary-600 rounded-lg transition-colors"
@@ -600,15 +613,42 @@ export function HotelBookingsPage() {
 
       {/* Add / Edit Hotel Booking Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingBooking ? 'Edit Hotel Reservation' : 'New Hotel Reservation'} size="lg">
-        <div className="p-5 space-y-5 max-h-[85vh] overflow-y-auto custom-scrollbar">
+        <div className="p-5 space-y-5">
           {error && (
             <div className="flex gap-2 p-3 bg-error-50 border border-error-200 text-error-700 rounded-lg text-sm">
               <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
             </div>
           )}
 
-          {/* Section 1: Reservation Identification & Status */}
-          <div className="bg-primary-50/40 p-4 rounded-xl border border-primary-100 space-y-3">
+          {/* Tabs Navigation */}
+          <div className="flex border-b border-neutral-200 gap-6 mb-4 mt-2">
+            <button 
+              type="button"
+              className={`pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'details' ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}
+              onClick={() => setActiveTab('details')}
+            >
+              1. Hotel & Dates
+            </button>
+            <button 
+              type="button"
+              className={`pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'guests' ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}
+              onClick={() => setActiveTab('guests')}
+            >
+              2. Guest List
+            </button>
+            <button 
+              type="button"
+              className={`pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'finance' ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}
+              onClick={() => setActiveTab('finance')}
+            >
+              3. Pricing & Rules
+            </button>
+          </div>
+
+          {activeTab === 'details' && (
+            <div className="space-y-5">
+              {/* Section 1: Reservation Identification & Status */}
+              <div className="bg-primary-50/40 p-4 rounded-xl border border-primary-100 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-primary-900 uppercase tracking-widest flex items-center gap-1.5">
                 <FileText size={14} className="text-primary-600" /> 1. Reservation Identification & Status
@@ -637,16 +677,17 @@ export function HotelBookingsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="label font-bold text-neutral-700">Booking ID *</label>
+                <label className="label font-bold text-neutral-700">Booking ID (Auto)</label>
                 <input
-                  className="input-field font-mono font-bold text-primary-700 bg-white"
-                  placeholder="e.g. BK-88301"
+                  className="input-field font-mono font-bold text-primary-700 bg-neutral-100 cursor-not-allowed"
+                  placeholder="Auto-generated"
                   value={form.booking_reference}
-                  onChange={e => f('booking_reference', e.target.value)}
+                  readOnly
+                  disabled
                 />
               </div>
               <div>
-                <label className="label font-bold text-neutral-700">Hotel Confirmation ID *</label>
+                <label className="label font-bold text-neutral-700">Hotel Confirmation ID</label>
                 <input
                   className="input-field font-mono font-bold text-teal-700 bg-white"
                   placeholder="e.g. CNF-SWISS-9921"
@@ -665,9 +706,13 @@ export function HotelBookingsPage() {
               </div>
             </div>
           </div>
+            </div>
+          )}
 
-          {/* Section 2: Guest Information */}
-          <div className="card p-4 border border-neutral-200 space-y-3">
+          {activeTab === 'guests' && (
+            <div className="space-y-5">
+              {/* Section 2: Guest Information */}
+              <div className="card p-4 border border-neutral-200 space-y-3">
             <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-1.5 border-b border-neutral-100 pb-2">
               <Users size={14} className="text-primary-600" /> 2. Guest Information
             </h4>
@@ -711,7 +756,7 @@ export function HotelBookingsPage() {
                   className="input-field font-bold"
                   placeholder="2"
                   value={form.adults_count}
-                  onChange={e => f('adults_count', e.target.value)}
+                  onChange={e => syncGuestsWithCount('Adult', parseInt(e.target.value) || 0)}
                 />
               </div>
 
@@ -723,14 +768,112 @@ export function HotelBookingsPage() {
                   className="input-field font-bold"
                   placeholder="0"
                   value={form.children_count}
-                  onChange={e => f('children_count', e.target.value)}
+                  onChange={e => syncGuestsWithCount('Child', parseInt(e.target.value) || 0)}
                 />
               </div>
             </div>
-          </div>
 
-          {/* Section 3: Hotel & Accommodation Details */}
-          <div className="card p-4 border border-neutral-200 space-y-3">
+            {/* Guest Assignment Grid */}
+            <div className="mt-5 border border-neutral-200 rounded-xl overflow-hidden">
+              <div className="bg-neutral-50 px-4 py-2 border-b border-neutral-200 flex justify-between items-center">
+                <span className="text-xs font-bold text-neutral-700">Guest Room Assignment (Optional)</span>
+                <button
+                  type="button"
+                  onClick={() => handleGuestsUpdate([...(form.guests || []), { id: Date.now().toString(), name: '', age_group: 'Adult', room_no: 'Room 1' }])}
+                  className="text-[10px] font-bold bg-white border border-neutral-300 text-neutral-600 px-2 py-1 rounded hover:bg-neutral-100 flex items-center gap-1"
+                >
+                  <Plus size={12} /> Add Extra Guest
+                </button>
+              </div>
+              <div className="p-0 overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-neutral-100/50 text-[10px] text-neutral-500 uppercase">
+                      <th className="p-2 font-bold w-1/2">Guest Name</th>
+                      <th className="p-2 font-bold w-1/4">Age Group</th>
+                      <th className="p-2 font-bold w-1/4">Assign to Room</th>
+                      <th className="p-2 font-bold text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(form.guests || []).map((guest: any, index: number) => (
+                      <tr key={guest.id} className="border-t border-neutral-100">
+                        <td className="p-2">
+                          <input
+                            className="w-full text-xs p-1.5 border border-neutral-200 rounded outline-none focus:border-primary-500"
+                            placeholder="Guest Name"
+                            value={guest.name}
+                            onChange={e => {
+                              const newGuests = [...form.guests];
+                              newGuests[index].name = e.target.value;
+                              handleGuestsUpdate(newGuests);
+                              if (index === 0 && !form.customer_name) f('customer_name', e.target.value);
+                            }}
+                          />
+                        </td>
+                        <td className="p-2">
+                          <select
+                            className="w-full text-xs p-1.5 border border-neutral-200 rounded outline-none"
+                            value={guest.age_group}
+                            onChange={e => {
+                              const newGuests = [...form.guests];
+                              newGuests[index].age_group = e.target.value;
+                              handleGuestsUpdate(newGuests);
+                            }}
+                          >
+                            <option value="Adult">Adult</option>
+                            <option value="Child">Child</option>
+                            <option value="Infant">Infant</option>
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <select
+                            className="w-full text-xs p-1.5 border border-neutral-200 rounded outline-none font-bold text-primary-700 bg-primary-50/50"
+                            value={guest.room_no}
+                            onChange={e => {
+                              const newGuests = [...form.guests];
+                              newGuests[index].room_no = e.target.value;
+                              handleGuestsUpdate(newGuests);
+                            }}
+                          >
+                            {Array.from({ length: Number(form.rooms_count) || 1 }).map((_, i) => (
+                              <option key={i} value={`Room ${i + 1}`}>Room {i + 1}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newGuests = form.guests.filter((_, i) => i !== index);
+                              handleGuestsUpdate(newGuests);
+                            }}
+                            className="text-error-500 hover:bg-error-50 p-1 rounded"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!form.guests || form.guests.length === 0) && (
+                      <tr>
+                        <td colSpan={4} className="p-3 text-center text-xs text-neutral-400">
+                          No guests added to assignment grid.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'details' && (
+          <div className="space-y-5">
+            {/* Section 3: Hotel & Accommodation Details */}
+              <div className="card p-4 border border-neutral-200 space-y-3">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
               <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-1.5">
                 <Building2 size={14} className="text-teal-600" /> 3. Hotel & Accommodation Details
@@ -868,10 +1011,14 @@ export function HotelBookingsPage() {
                 </span>
               </div>
             </div>
+            </div>
           </div>
+        )}
 
-          {/* Section 5: Pricing & Financials */}
-          <div className="card p-4 border border-neutral-200 space-y-3">
+        {activeTab === 'finance' && (
+          <div className="space-y-5">
+            {/* Section 5: Pricing & Financials */}
+              <div className="card p-4 border border-neutral-200 space-y-3">
             <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-1.5 border-b border-neutral-100 pb-2">
               <DollarSign size={14} className="text-success-600" /> 5. Pricing & Financials
             </h4>
@@ -960,6 +1107,8 @@ export function HotelBookingsPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
 
           {/* Submit / Cancel Buttons */}
           <div className="flex gap-3 pt-2">
@@ -975,7 +1124,7 @@ export function HotelBookingsPage() {
       {/* Hotel Voucher Printable Modal */}
       {selectedVoucher && (
         <Modal isOpen={showVoucherModal} onClose={() => setShowVoucherModal(false)} title="Hotel Confirmation Voucher" size="lg">
-          <div className="p-6 space-y-6 max-h-[85vh] overflow-y-auto custom-scrollbar">
+          <div className="p-6 space-y-6">
             <div className="border-2 border-primary-600 p-6 rounded-2xl bg-white shadow-sm space-y-6">
               {/* Header */}
               <div className="flex justify-between items-start border-b border-neutral-200 pb-4">

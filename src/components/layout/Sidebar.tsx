@@ -10,7 +10,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 export type ActiveModule =
   | 'dashboard' | 'mobile-dashboard'
   | 'tickets-individual' | 'tickets-b2b' | 'tickets-report' | 'tickets-setup' | 'tickets-suppliers'
-  | 'hotels-bookings' | 'hotels-directory'
+  | 'hotels-bookings' | 'hotels-directory' | 'hotels-settings'
   | 'umrah-packages' | 'umrah-groups' | 'umrah-pilgrims'
   | 'hajj-packages' | 'hajj-pilgrims' | 'hajj-logistics'
   | 'tours-domestic' | 'tours-international' | 'tours-bookings'
@@ -59,6 +59,7 @@ const navGroups: NavGroup[] = [
       { id: 'hotels-bookings', label: 'Hotel Bookings' },
       { id: 'hotels-directory', label: 'Hotel Directory & Info' },
       { id: 'crm-customers', label: 'Customer Information' },
+      { id: 'hotels-settings', label: 'Settings' },
     ],
     roles: ['super_admin', 'admin', 'sales_agent', 'tour_manager'],
   },

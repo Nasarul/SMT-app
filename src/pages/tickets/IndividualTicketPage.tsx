@@ -38,6 +38,7 @@ interface Supplier {
 }
 
 const emptyForm = {
+  ticketing_source: 'gds' as 'gds' | 'non_gds',
   ticket_category: 'international' as 'domestic' | 'international',
   ticket_number: '',
   passenger_name: '',
@@ -223,6 +224,7 @@ export function IndividualTicketPage() {
       const cost_fare = fd.total_client_fare - fd.net_profit;
       const combinedTaxes = {
         category: f.ticket_category,
+        ticketing_source: f.ticketing_source,
         ut: f.ut, bd: f.bd, e5: f.e5, ow: f.ow, p7: f.p7, p8: f.p8, e7: f.e7, g8: f.g8, ts: f.ts,
         custom_taxes: f.custom_taxes || [],
         metadata: f.metadata || []
@@ -418,8 +420,8 @@ export function IndividualTicketPage() {
     // 1. PASSENGER NAME
     let extractedName = '';
     const namePrefixMatch = 
-      text.match(/(?:PASSENGER\s+NAME|PASSENGER\s+DETAILS|PAX\s+NAME|PREPARED\s+FOR|NAME)\s*[:#\s]+\s*([A-Z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|FORM OF|FOOP|RL|REF|RESERVATION|STATUS|ISSD|ISSUING|\r|\n|$))/i) ||
-      text.match(/(?:1\.|2\.|3\.|01\.|02\.)\s*([A-Z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|\r|\n|$))/i);
+      text.match(/(?:PASSENGER\s+NAME|PASSENGER\s+DETAILS|PAX\s+NAME|PREPARED\s+FOR|NAME|PASSENGER|PAX)\s*[:#\-=\s]+\s*([A-Za-z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|FORM OF|FOOP|RL|REF|RESERVATION|STATUS|ISSD|ISSUING|\r|\n|$))/i) ||
+      text.match(/(?:1\.|2\.|3\.|01\.|02\.|1\s)\s*([A-Za-z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|\r|\n|$))/i);
 
     if (namePrefixMatch) {
       let cand = namePrefixMatch[1].replace(/[\r\n]+/g, ' ').trim();
@@ -431,7 +433,7 @@ export function IndividualTicketPage() {
     }
 
     if (!extractedName) {
-      const surnameMatch = text.match(/\b([A-Z]{2,}\s*\/\s*[A-Z\s]{2,}(?:\s+(?:MR|MS|MRS|MSTR|MISS))?)\b/i);
+      const surnameMatch = text.match(/\b([A-Za-z]{2,}\s*\/\s*[A-Za-z\s]{2,}(?:\s+(?:MR|MS|MRS|MSTR|MISS))?)\b/i);
       if (surnameMatch) {
         const cand = surnameMatch[1].trim();
         const upper = cand.toUpperCase();
@@ -442,34 +444,41 @@ export function IndividualTicketPage() {
     }
 
     if (!extractedName) {
-      const titleNameMatch = text.match(/(?:Mr\.|Mrs\.|Ms\.|Mstr\.)\s+([A-Za-z\s.]+?)(?=\s+\d{10,14}|\s+MAAS|\s+Adult|\r|\n|$)/i);
+      const titleNameMatch = text.match(/(?:Mr\.|Mrs\.|Ms\.|Mstr\.|Mr |Ms |Mrs )\s+([A-Za-z\s.]+?)(?=\s+\d{10,14}|\s+MAAS|\s+Adult|\r|\n|$)/i);
       if (titleNameMatch) {
         extractedName = titleNameMatch[1].trim();
       }
     }
 
     if (extractedName) {
-      newData.passenger_name = extractedName;
+      newData.passenger_name = extractedName.toUpperCase();
     }
 
     // 2. PNR / BOOKING REFERENCE (Supports GDS headers e.g. "BOOKING REF : AMADEUS: 9XEUBG")
-    const invalidPnrs = ['ERENCE', 'NUMBER', 'AMADEU', 'GALILE', 'SABRE', 'REFNUM', 'CODE00', 'STATUS', 'DETAILS'];
+    const invalidPnrs = ['ERENCE', 'NUMBER', 'AMADEU', 'GALILE', 'SABRE', 'REFNUM', 'CODE00', 'STATUS', 'DETAILS', 'TICKET'];
     const pnrMatches = [
-      ...text.matchAll(/(?:PNR|BOOKING REFERENCE|BOOKING REF|RESERVATION CODE|RESERVATION NO|RECORD LOCATOR|CONFIRMATION|RL)\s*[:#\s]*\s*(?:AMADEUS|GALILEO|SABRE|1A|1G|1P|1V|AIRLINE)?\s*[:#\s]*\s*(?:[A-Z0-9]{2}\/)?([A-Z0-9]{6})\b/gi)
+      ...text.matchAll(/(?:PNR|BOOKING REFERENCE|BOOKING REF|RESERVATION CODE|RESERVATION NO|RECORD LOCATOR|CONFIRMATION|RL|BOOKING)\s*[:#\-=\s]*\s*(?:AMADEUS|GALILEO|SABRE|1A|1G|1P|1V|AIRLINE)?\s*[:#\s]*\s*(?:[A-Z0-9]{2}\/)?([A-Z0-9]{5,6})\b/gi)
     ];
 
     for (const match of pnrMatches) {
       const val = match[1].toUpperCase();
-      if (!invalidPnrs.includes(val) && !/^\d{6}$/.test(val) && /^[A-Z0-9]{6}$/.test(val)) {
+      if (!invalidPnrs.includes(val) && !/^\d+$/.test(val) && /^[A-Z0-9]{5,6}$/.test(val)) {
         newData.pnr = val;
         break;
       }
     }
 
     if (!newData.pnr) {
-      const pnrStandalone = text.match(/\bPNR\s*[:#\s]*\s*([A-Z0-9]{6})\b/i);
-      if (pnrStandalone && !invalidPnrs.includes(pnrStandalone[1].toUpperCase()) && !/^\d{6}$/.test(pnrStandalone[1])) {
-        newData.pnr = pnrStandalone[1].toUpperCase();
+      // Fallback: look for an isolated 6 character alphanumeric that mixes letters and numbers
+      const pnrStandalone = text.match(/\b([A-Z0-9]{6})\b/gi);
+      if (pnrStandalone) {
+        for (const match of pnrStandalone) {
+           const val = match.toUpperCase();
+           if (!invalidPnrs.includes(val) && /[A-Z]/.test(val) && /[0-9]/.test(val)) {
+             newData.pnr = val;
+             break;
+           }
+        }
       }
     }
 
@@ -484,7 +493,7 @@ export function IndividualTicketPage() {
 
     // 4. AIRLINE DETECTION (Header vs Code Matching)
     let extractedAirline = '';
-    const issuingMatch = text.match(/ISSUING\s+AIRLINE\s*[:#\s]*\s*([A-Z0-9\s-]+?)(?=\s*(?:TICKET|ETKT|BOOKING|DATE|PNR|\r|\n|$))/i);
+    const issuingMatch = text.match(/(?:ISSUING\s+AIRLINE|AIRLINE|CARRIER)\s*[:#\-=\s]*\s*([A-Z0-9\s-]+?)(?=\s*(?:TICKET|ETKT|BOOKING|DATE|PNR|\r|\n|$))/i);
     if (issuingMatch) {
       const cand = issuingMatch[1].trim();
       if (cand.length > 2 && !forbiddenWords.includes(cand.toUpperCase())) {
@@ -509,6 +518,8 @@ export function IndividualTicketPage() {
       else if (/SINGAPORE AIRLINES|\bSQ\b/i.test(text)) extractedAirline = 'Singapore Airlines';
       else if (/THAI AIRWAYS|\bTG\b/i.test(text)) extractedAirline = 'Thai Airways';
       else if (/INDIGO|\b6E\b/i.test(text)) extractedAirline = 'IndiGo';
+      else if (/NOVOAIR|NOVO AIR|\bVQ\b/i.test(text)) extractedAirline = 'Novoair';
+      else if (/AIR ASTRA|\b2A\b/i.test(text)) extractedAirline = 'Air Astra';
     }
 
     const normalizeAirlineName = (raw: string, list: string[]) => {
@@ -539,6 +550,8 @@ export function IndividualTicketPage() {
         else if (code === 'MH') newData.airline = 'Malaysia Airlines';
         else if (code === 'TG') newData.airline = 'Thai Airways';
         else if (code === '6E') newData.airline = 'IndiGo';
+        else if (code === 'VQ') newData.airline = 'Novoair';
+        else if (code === '2A') newData.airline = 'Air Astra';
       }
     }
 
@@ -575,7 +588,7 @@ export function IndividualTicketPage() {
       JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
     };
 
-    let issueYear = '2026';
+    let issueYear = new Date().getFullYear().toString(); // Default to current year instead of 2026
     const issueDateMatch = text.match(/(?:DATE|ISSUED)\s*[:#\s]*\s*\d{1,2}\s+[A-Z]{3}\s+(\d{4})/i);
     if (issueDateMatch) issueYear = issueDateMatch[1];
 
@@ -586,22 +599,23 @@ export function IndividualTicketPage() {
       newData.travel_date = issueYear + '-' + month + '-' + day;
     } else {
       const dateMatch = 
-        text.match(/(?:TRAVEL DATE|DEPARTURE DATE|FLIGHT DATE)\s*[:#\s]*\s*(\d{1,2})[-\s/]([A-Z]{3})[-\s/](\d{2,4})/i) ||
-        text.match(/\b(\d{1,2})\s*([A-Z]{3})\s*(\d{4})\b/i) ||
-        text.match(/\b(\d{1,2})[-\s/]([A-Z]{3})[-\s/](\d{2})\b/i) ||
+        text.match(/(?:TRAVEL DATE|DEPARTURE DATE|FLIGHT DATE|DEPARTURE)\s*[:#\-=\s]*\s*(\d{1,2})[-\s/]([A-Za-z]{3})[-\s/](\d{2,4})/i) ||
+        text.match(/\b(\d{1,2})\s*([A-Za-z]{3})\s*(\d{4})\b/i) ||
+        text.match(/\b(\d{1,2})[-\s/]([A-Za-z]{3})[-\s/](\d{2})\b/i) ||
         text.match(/\b(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})\b/) ||
         text.match(/\b(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{4})\b/);
 
       if (dateMatch) {
-        if (monthNames[dateMatch[2]?.toUpperCase()]) {
+        const potentialMonth = dateMatch[2]?.toUpperCase();
+        if (potentialMonth && monthNames[potentialMonth]) {
           const day = dateMatch[1].padStart(2, '0');
-          const month = monthNames[dateMatch[2].toUpperCase()];
+          const month = monthNames[potentialMonth];
           let year = dateMatch[3] || issueYear;
           if (year.length === 2) year = '20' + year;
           newData.travel_date = year + '-' + month + '-' + day;
-        } else if (dateMatch[1].length === 4) {
+        } else if (dateMatch[1] && dateMatch[1].length === 4) {
           newData.travel_date = dateMatch[1] + '-' + dateMatch[2].padStart(2, '0') + '-' + dateMatch[3].padStart(2, '0');
-        } else if (dateMatch[3]?.length === 4) {
+        } else if (dateMatch[3] && dateMatch[3].length === 4) {
           newData.travel_date = dateMatch[3] + '-' + dateMatch[2].padStart(2, '0') + '-' + dateMatch[1].padStart(2, '0');
         }
       }
@@ -679,7 +693,10 @@ export function IndividualTicketPage() {
     }
     newData.custom_taxes = customTaxes;
 
-    if (newData.origin !== 'DAC' || (newData.destination && !['CXB', 'CGP', 'ZYL', 'SPD', 'JSR', 'RJH', 'BZL'].includes(newData.destination))) {
+    // Auto detect domestic vs international correctly
+    if (newData.destination && ['CXB', 'CGP', 'ZYL', 'SPD', 'JSR', 'RJH', 'BZL', 'COX', 'DAC'].includes(newData.destination.toUpperCase()) && ['CXB', 'CGP', 'ZYL', 'SPD', 'JSR', 'RJH', 'BZL', 'COX', 'DAC'].includes(newData.origin.toUpperCase())) {
+      newData.ticket_category = 'domestic';
+    } else if (newData.destination) {
       newData.ticket_category = 'international';
     }
 
@@ -803,6 +820,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
         const newForms = parsedPassengers.map(p => ({
           ...emptyForm,
           ticket_category: p.ticket_category === 'domestic' ? 'domestic' : 'international',
+          ticketing_source: 'gds', // Automatically sets to GDS if parsed from GDS text
           passenger_name: p.passenger_name || '',
           ticket_number: p.ticket_number || '',
           pnr: p.pnr || '',
@@ -1033,6 +1051,45 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
               <AlertCircle size={14} className="shrink-0" /> {error}
             </div>
           )}
+
+          {/* Ticketing Source & Auto-Parser Block */}
+          <div className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 p-3 rounded-xl border border-blue-100/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">Platform / Ticketing Source</span>
+              <div className="flex items-center gap-4">
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer" title="Individual e-Tickets per Passenger">
+                  <input
+                    type="radio"
+                    name={`ticketing_src_${activeTab}`}
+                    checked={form.ticketing_source === 'gds'}
+                    onChange={() => updateActiveForm('ticketing_source', 'gds')}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  🌐 GDS (Sabre/Amadeus)
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer" title="Shared PNR for multiple passengers">
+                  <input
+                    type="radio"
+                    name={`ticketing_src_${activeTab}`}
+                    checked={form.ticketing_source === 'non_gds'}
+                    onChange={() => updateActiveForm('ticketing_source', 'non_gds')}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  ✈️ Non-GDS (LCC/Portal)
+                </label>
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-1 sm:text-right">
+              <span className="text-[10px] text-indigo-700 font-semibold">Fast Data Entry? Auto-detect PNR & Pax</span>
+              <button 
+                onClick={() => { setShowForm(false); setShowImportModal(true); }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Download size={14} /> Import GDS PDF/Text
+              </button>
+            </div>
+          </div>
 
           {/* Top Bar: Ticket Category & PNR Quick Badge */}
           <div className="bg-gradient-to-r from-neutral-50 via-primary-50/20 to-neutral-50 p-2.5 rounded-xl border border-neutral-200 flex items-center justify-between gap-3 shadow-xs">
