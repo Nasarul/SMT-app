@@ -200,6 +200,7 @@ export function IndividualTicketPage() {
       total_client_fare,
       net_profit 
     };
+  };
 
   const isFormValid = () => {
     return forms.every(f => 
