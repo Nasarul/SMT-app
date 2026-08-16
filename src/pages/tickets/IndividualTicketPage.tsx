@@ -11,7 +11,7 @@ interface Ticket {
   id: string;
   ticket_number: string;
   passenger_name: string;
-  passport_number: string;
+  passport_number?: string;
   airline: string;
   pnr: string;
   origin: string;
@@ -43,6 +43,7 @@ const emptyForm = {
   ticket_number: '',
   passenger_name: '',
   passport_number: '',
+  passport_expiry: '',
   mobile: '',
   issue_date: new Date().toISOString().split('T')[0],
   airline: '',
@@ -99,6 +100,8 @@ export function IndividualTicketPage() {
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [importError, setImportError] = useState('');
   const [invoiceData, setInvoiceData] = useState<any[] | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isExtractingPdf, setIsExtractingPdf] = useState(false);
 
   // Dynamic Lists
   const [airlineList, setAirlineList] = useState<string[]>(AIRLINES_FROM_DAC);
@@ -254,7 +257,9 @@ export function IndividualTicketPage() {
         ticketing_source: f.ticketing_source,
         ut: f.ut, bd: f.bd, e5: f.e5, ow: f.ow, p7: f.p7, p8: f.p8, e7: f.e7, g8: f.g8, ts: f.ts,
         custom_taxes: f.custom_taxes || [],
+        passport_number: f.passport_number || '',
         mobile: f.mobile || '',
+        passport_expiry: f.passport_expiry || '',
         issue_date: f.issue_date || '',
         time_limit: f.time_limit || '',
         flight_number: f.flight_number || '',
@@ -302,6 +307,18 @@ export function IndividualTicketPage() {
       loadTickets();
     }
     setSaving(false);
+  };
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      const { error: updateErr } = await supabase.from('air_tickets').update({ status: newStatus }).eq('id', id);
+      if (updateErr) throw updateErr;
+      setTickets(tickets.map(t => t.id === id ? { ...t, status: newStatus } : t));
+      setSuccess('Status updated successfully');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (e: any) {
+      setError(e.message);
+    }
   };
 
   const filtered = tickets.filter(t =>
@@ -399,6 +416,63 @@ export function IndividualTicketPage() {
     if (forms.length <= 1) return;
     setForms(prev => prev.filter((_, i) => i !== indexToRemove));
     setActiveTab(prev => (prev >= indexToRemove ? Math.max(0, prev - 1) : prev));
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    setImportError('');
+    
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      setIsExtractingPdf(true);
+      try {
+        const text = await extractTextFromPdf(file);
+        setGdsText(text);
+        setSuccess('PDF text extracted successfully! You can now parse it.');
+        setTimeout(() => setSuccess(''), 3000);
+      } catch (err: any) {
+        setImportError(err.message || 'Failed to extract text from PDF.');
+      } finally {
+        setIsExtractingPdf(false);
+      }
+    } else if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setGdsText(e.target?.result as string);
+      reader.readAsText(file);
+    } else {
+      setImportError('Please drop a valid PDF or text file.');
+    }
+  };
+
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    if (!(window as any).pdfjsLib) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load PDF parser library.'));
+        document.body.appendChild(script);
+      });
+      const workerScript = document.createElement('script');
+      workerScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = workerScript.src;
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await (window as any).pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    
+    return fullText;
   };
 
   const parseGDS = () => {
@@ -894,6 +968,30 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
   const form = forms[activeTab] || emptyForm;
   const fareData = getFareData(form);
 
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (showForm && isFormValid() && !saving) {
+          handleSave();
+        }
+      }
+      if (e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        if (showForm) {
+          addNewPassengerTab();
+        }
+      }
+      if (e.key === 'Escape') {
+        if (showForm) setShowForm(false);
+        if (showImportModal) setShowImportModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showForm, showImportModal, forms, activeTab, saving]);
+
   return (
     <div className="p-4 lg:p-6 animate-fade-in">
       <div className="page-header">
@@ -986,7 +1084,9 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                   </td>
                   <td className="table-cell">
                     <div className="font-medium text-neutral-800">{ticket.passenger_name}</div>
-                    <div className="text-xs text-neutral-400">{ticket.passport_number}</div>
+                    <div className="text-xs text-neutral-400">
+                      {ticket.passport_number || (ticket.metadata ? JSON.parse(ticket.metadata).passport_number : '')}
+                    </div>
                   </td>
                   <td className="table-cell">
                     <div className="flex items-center gap-1.5 text-sm">
@@ -1002,11 +1102,33 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                   </td>
                   <td className="table-cell text-sm">{formatDate(ticket.travel_date)}</td>
                   <td className="table-cell text-right font-semibold text-neutral-800">{formatBDT(ticket.total_fare)}</td>
-                  <td className={`table-cell text-right font-semibold text-sm ${ticket.profit >= 0 ? 'text-success-600' : 'text-error-600'}`}>
-                    {formatBDT(ticket.profit)}
+                  <td className="table-cell text-right font-semibold text-sm">
+                    <span className={ticket.profit >= 0 ? 'text-success-600' : 'text-error-600'}>
+                      {formatBDT(ticket.profit)}
+                    </span>
                   </td>
                   <td className="table-cell text-center">
-                    <Badge variant={getStatusColor(ticket.status) as any}>{ticket.status}</Badge>
+                    <select 
+                      className={`text-[11px] font-bold rounded px-2 py-1 border-0 cursor-pointer outline-none shadow-sm ${
+                        ticket.status === 'issued' ? 'bg-success-100 text-success-700' :
+                        ticket.status === 'hold' ? 'bg-warning-100 text-warning-700' :
+                        ticket.status === 'voided' ? 'bg-neutral-100 text-neutral-700' :
+                        'bg-error-100 text-error-700'
+                      }`}
+                      value={ticket.status}
+                      onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                    >
+                      <option value="issued">Issued</option>
+                      <option value="hold">Hold</option>
+                      <option value="voided">Voided</option>
+                      <option value="refunded">Refunded</option>
+                      <option value="reissued">Reissued</option>
+                    </select>
+                    {ticket.status === 'hold' && ticket.metadata && JSON.parse(ticket.metadata).time_limit && (
+                      <div className="text-[10px] mt-1.5 font-bold text-error-600 bg-error-50 px-1 py-0.5 rounded border border-error-100">
+                        TTL: {new Date(JSON.parse(ticket.metadata).time_limit).toLocaleString()}
+                      </div>
+                    )}
                   </td>
                   <td className="table-cell text-right">
                     <button 
@@ -1110,11 +1232,15 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passenger Name *</label>
                 <input className={`input-field py-1.5 px-2.5 text-xs font-medium ${!form.passenger_name?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport / ticket" />
               </div>
-              <div className="col-span-6 sm:col-span-3">
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passport Number</label>
-                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} onBlur={(e) => handleClientAutofill('passport_number', e.target.value)} placeholder="Passport No." />
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passport No.</label>
+                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} onBlur={(e) => handleClientAutofill('passport_number', e.target.value)} placeholder="Passport" />
               </div>
-              <div className="col-span-6 sm:col-span-3">
+              <div className="col-span-6 sm:col-span-2 relative">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Pass. Expiry</label>
+                <input type="date" title={form.passport_expiry && form.travel_date && (new Date(form.passport_expiry).getTime() - new Date(form.travel_date).getTime() < 15552000000) ? 'Passport expires within 6 months of travel date!' : ''} className={`input-field py-1.5 px-2.5 text-xs ${form.passport_expiry && form.travel_date && (new Date(form.passport_expiry).getTime() - new Date(form.travel_date).getTime() < 15552000000) ? 'border-error-400 bg-error-50 text-error-700' : ''}`} value={form.passport_expiry || ''} onChange={e => updateActiveForm('passport_expiry', e.target.value)} />
+              </div>
+              <div className="col-span-6 sm:col-span-2">
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Mobile Number</label>
                 <input className="input-field py-1.5 px-2.5 text-xs" value={form.mobile || ''} onChange={e => updateActiveForm('mobile', e.target.value)} onBlur={(e) => handleClientAutofill('mobile', e.target.value)} placeholder="01XXXXXXXXX" />
               </div>
@@ -1365,15 +1491,28 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           </div>
 
           {/* Footer Actions */}
-          <div className="flex gap-3 justify-end pt-2 border-t border-neutral-100 mt-1 sticky bottom-0 bg-white pb-1">
-            <button onClick={() => setShowForm(false)} className="btn-ghost py-2 px-6 text-xs font-bold">Discard</button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !isFormValid()}
-              className={`py-2 px-8 text-xs font-bold flex items-center justify-center gap-2 rounded-lg transition-colors ${(saving || !isFormValid()) ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'btn-primary'}`}
-            >
-              {saving ? 'Processing...' : `Issue Ticket${forms.length > 1 ? ` (${forms.length} Passengers)` : ''} & Save`}
-            </button>
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-neutral-100 mt-1 sticky bottom-0 bg-white pb-1">
+            <div className="flex items-center gap-4 text-xs font-bold text-neutral-600 bg-neutral-50 px-4 py-2 rounded-lg border border-neutral-200 shadow-sm w-full sm:w-auto">
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase tracking-wider opacity-70">Total Invoice</span>
+                <span className="text-primary-700 text-sm">{formatBDT(forms.reduce((sum, f) => sum + getFareData(f).total_client_fare, 0))}</span>
+              </div>
+              <div className="w-px h-6 bg-neutral-300"></div>
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase tracking-wider opacity-70">Total Profit</span>
+                <span className="text-success-600 text-sm">{formatBDT(forms.reduce((sum, f) => sum + getFareData(f).net_profit, 0))}</span>
+              </div>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto justify-end">
+              <button onClick={() => setShowForm(false)} className="btn-ghost py-2 px-4 text-xs font-bold">Discard (Esc)</button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !isFormValid()}
+                className={`py-2 px-6 text-xs font-bold flex items-center justify-center gap-2 rounded-lg transition-colors shadow-sm ${(saving || !isFormValid()) ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'btn-primary'}`}
+              >
+                {saving ? 'Processing...' : `Issue Ticket${forms.length > 1 ? ` (${forms.length})` : ''} & Save (Ctrl+S)`}
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
@@ -1394,14 +1533,29 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             </div>
           )}
 
-          <div>
-            <label className="label">Paste GDS Report Text *</label>
+          <div 
+            className={`relative border-2 border-dashed rounded-xl transition-colors ${
+              isDragging ? 'border-primary-500 bg-primary-50' : 'border-neutral-200 bg-white'
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+            onDrop={handleDrop}
+          >
+            <label className="label absolute -top-3 left-3 bg-white px-1 text-primary-700">Paste or Drop GDS Report PDF/Text *</label>
             <textarea 
-              className="input-field min-h-[200px] font-mono text-xs leading-normal" 
-              placeholder="NAME: RAHMAN/SAYEDUR... TICKET: 779..."
+              className="input-field min-h-[200px] font-mono text-xs leading-normal bg-transparent border-0 ring-0 focus:ring-0 resize-none p-4 w-full" 
+              placeholder="NAME: RAHMAN/SAYEDUR... TICKET: 779... OR drag and drop a PDF file here"
               value={gdsText}
               onChange={e => { setGdsText(e.target.value); setImportError(''); }}
             />
+            {isExtractingPdf && (
+              <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center rounded-xl z-10">
+                <div className="text-primary-700 font-bold flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                  Extracting PDF Text...
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={() => { setShowImportModal(false); setImportError(''); }} className="btn-ghost flex-1">Cancel</button>
