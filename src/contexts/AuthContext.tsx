@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Models, ID } from 'appwrite';
-import { account, databases, databaseId, Profile } from '../lib/appwrite';
+import { supabase, Profile } from '../lib/supabase';
+import { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  user: Models.User<Models.Preferences> | null;
+  user: User | null;
   profile: Profile | null;
-  session: Models.Session | null;
+  session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -25,25 +25,21 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [session, setSession] = useState<Models.Session | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
     try {
-      if (!databaseId) {
-        console.warn('Appwrite databaseId not configured.');
-        return;
-      }
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 1200)
-      );
-      const profileDoc = await Promise.race([
-        databases.getDocument(databaseId, 'profiles', userId),
-        timeout,
-      ]);
-      setProfile(profileDoc as unknown as Profile);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      setProfile(data as Profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -52,104 +48,81 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Strict 1.2-second fallback timer: Ensures loading spinner turns off under all network conditions
-    const timer = setTimeout(() => {
-      if (isMounted) {
-        setLoading(false);
-      }
-    }, 1200);
-
     const initializeAuth = async () => {
       try {
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), 1200)
-        );
-
-        const currentSession = (await Promise.race([
-          account.getSession('current'),
-          timeout,
-        ])) as Models.Session;
-
+        const { data: { session } } = await supabase.auth.getSession();
+        
         if (!isMounted) return;
-        setSession(currentSession);
+        setSession(session);
+        setUser(session?.user ?? null);
 
-        const currentUser = (await Promise.race([
-          account.get(),
-          timeout,
-        ])) as Models.User<Models.Preferences>;
-
-        if (!isMounted) return;
-        setUser(currentUser);
-
-        if (currentUser) {
-          await fetchProfile(currentUser.$id);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
         }
       } catch (error) {
-        console.log('No active session found or request timed out.');
-        if (isMounted) {
-          setSession(null);
-          setUser(null);
-        }
+        console.error('Session error:', error);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-          clearTimeout(timer);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
     initializeAuth();
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+      }
+    });
+
     return () => {
       isMounted = false;
-      clearTimeout(timer);
+      subscription.unsubscribe();
     };
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
-      // 1. Purge active session to prevent 409 conflict
-      try {
-        await account.deleteSession('current');
-      } catch (e) {
-        // Ignore if no active session
-      }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      let activeSession: Models.Session;
-      try {
-        activeSession = await account.createEmailPasswordSession(email, password);
-      } catch (sessionErr: any) {
-        const errMsg = sessionErr?.message || '';
-        const code = sessionErr?.code;
-
-        // If user does not exist yet in Appwrite backend, auto-provision user account
-        if (code === 404 || errMsg.toLowerCase().includes('user_not_found') || errMsg.toLowerCase().includes('could not be found')) {
-          try {
-            const displayName = email.split('@')[0].replace(/[._-]/g, ' ');
-            await account.create(ID.unique(), email, password, displayName);
-            activeSession = await account.createEmailPasswordSession(email, password);
-          } catch (createErr: any) {
-            return { error: createErr?.message || 'Failed to auto-create user account in Appwrite.' };
-          }
-        } else {
-          return { error: errMsg || 'Invalid login credentials. Please check your email and password.' };
+      if (error) {
+        // Automatically create account if it doesn't exist to replicate old behavior
+        if (error.message.toLowerCase().includes('invalid login credentials')) {
+            const { error: signUpError } = await supabase.auth.signUp({
+               email,
+               password,
+               options: {
+                 data: {
+                   full_name: email.split('@')[0].replace(/[._-]/g, ' ')
+                 }
+               }
+            });
+            if (signUpError) return { error: signUpError.message };
+            
+            // Log in again
+            const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+            if (signInError) return { error: signInError.message };
+            return { error: null };
         }
+        return { error: error.message };
       }
 
-      setSession(activeSession);
-      const currentUser = await account.get();
-      setUser(currentUser);
-      await fetchProfile(currentUser.$id);
       return { error: null };
     } catch (error: any) {
-      console.error('Appwrite Sign In Error:', error);
-      return { error: error?.message || 'Login failed. Please check your credentials.' };
+      console.error('Supabase Sign In Error:', error);
+      return { error: error?.message || 'Login failed.' };
     }
   };
 
   const signOut = async () => {
     try {
-      await account.deleteSession('current');
+      await supabase.auth.signOut();
       setSession(null);
       setUser(null);
       setProfile(null);
@@ -160,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = async () => {
     if (user) {
-      await fetchProfile(user.$id);
+      await fetchProfile(user.id);
     }
   };
 
