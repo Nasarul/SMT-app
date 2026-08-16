@@ -417,27 +417,44 @@ export function IndividualTicketPage() {
       'AGENT', 'TRAVELS', 'PURANA', 'PALTAN', 'DARUS', 'SALAM', 'ADDRESS', 'TELEPHONE', 'IATA'
     ];
 
-    // 1. PASSENGER NAME
-    let extractedName = '';
-    const namePrefixMatch = 
-      text.match(/(?:PASSENGER\s+NAME|PASSENGER\s+DETAILS|PAX\s+NAME|PREPARED\s+FOR|NAME|PASSENGER|PAX)\s*[:#\-=\s]+\s*([A-Za-z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|FORM OF|FOOP|RL|REF|RESERVATION|STATUS|ISSD|ISSUING|\r|\n|$))/i) ||
-      text.match(/(?:1\.|2\.|3\.|01\.|02\.|1\s)\s*([A-Za-z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|\r|\n|$))/i);
+    // 1. TICKET NUMBER (Extracted first because it helps find the name in LCCs)
+    let extractedTicket = '';
+    const ticketPrefixMatch = text.match(/(?:TICKET|ETKT|TKT|ETICKET|TICKET NUMBER)\s*[:.#\-\s]*(\d{3})[.\-\s]*(\d{10})\b/i);
+    if (ticketPrefixMatch) {
+      extractedTicket = ticketPrefixMatch[1] + ticketPrefixMatch[2];
+    } else {
+      // Standalone 13 digit number (Very common in LCC tables)
+      const standaloneTicket = text.match(/\b(\d{3})[-\s]?(\d{10})\b/);
+      if (standaloneTicket) extractedTicket = standaloneTicket[1] + standaloneTicket[2];
+    }
+    if (extractedTicket) newData.ticket_number = extractedTicket;
 
-    if (namePrefixMatch) {
-      let cand = namePrefixMatch[1].replace(/[\r\n]+/g, ' ').trim();
-      cand = cand.replace(/^[:\s-]+/, '').trim();
-      const upperCand = cand.toUpperCase();
-      if (!forbiddenWords.some(w => upperCand === w) && cand.length > 2) {
-        extractedName = cand;
-      }
+    // 2. PASSENGER NAME
+    let extractedName = '';
+    
+    // Strict GDS Format: LASTNAME/FIRSTNAME TITLE
+    const strictSlashMatch = text.match(/\b([A-Za-z]{2,}\s*\/\s*[A-Za-z]{2,}\s+(?:MR|MS|MRS|MSTR|MISS))\b/i);
+    if (strictSlashMatch) {
+      extractedName = strictSlashMatch[1].trim();
+    }
+
+    if (!extractedName && extractedTicket) {
+      // LCC Format: Title First Last 1234567890123
+      const nameBeforeTicket = new RegExp(`(?:Mr\\.|Mrs\\.|Ms\\.|Mstr\\.|Mr |Ms |Mrs )\\s+([A-Za-z\\s.]+?)\\s+${extractedTicket}`, 'i');
+      const lccMatch = text.match(nameBeforeTicket);
+      if (lccMatch) extractedName = lccMatch[1].trim();
     }
 
     if (!extractedName) {
-      const surnameMatch = text.match(/\b([A-Za-z]{2,}\s*\/\s*[A-Za-z\s]{2,}(?:\s+(?:MR|MS|MRS|MSTR|MISS))?)\b/i);
-      if (surnameMatch) {
-        const cand = surnameMatch[1].trim();
-        const upper = cand.toUpperCase();
-        if (!forbiddenWords.some(w => upper === w)) {
+      const namePrefixMatch = 
+        text.match(/(?:PASSENGER\s+NAME|PAX\s+NAME|NAME)\s*[:#\-=\s]+\s*([A-Za-z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|FORM OF|FOOP|RL|REF|RESERVATION|STATUS|ISSD|ISSUING|\r|\n|$))/i) ||
+        text.match(/(?:1\.|2\.|3\.|01\.|02\.)\s*([A-Za-z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|\r|\n|$))/i);
+
+      if (namePrefixMatch) {
+        let cand = namePrefixMatch[1].replace(/[\r\n]+/g, ' ').trim();
+        cand = cand.replace(/^[:\s-]+/, '').trim();
+        const upperCand = cand.toUpperCase();
+        if (!forbiddenWords.some(w => upperCand.includes(w)) && !upperCand.includes('BAG') && !upperCand.includes('ALLOWANCE') && !upperCand.includes('TICKET') && cand.length > 2) {
           extractedName = cand;
         }
       }
@@ -454,10 +471,10 @@ export function IndividualTicketPage() {
       newData.passenger_name = extractedName.toUpperCase();
     }
 
-    // 2. PNR / BOOKING REFERENCE (Supports GDS headers e.g. "BOOKING REF : AMADEUS: 9XEUBG")
-    const invalidPnrs = ['ERENCE', 'NUMBER', 'AMADEU', 'GALILE', 'SABRE', 'REFNUM', 'CODE00', 'STATUS', 'DETAILS', 'TICKET'];
+    // 3. PNR / BOOKING REFERENCE
+    const invalidPnrs = ['ERENCE', 'NUMBER', 'AMADEU', 'GALILE', 'SABRE', 'REFNUM', 'CODE00', 'STATUS', 'DETAILS', 'TICKET', 'TRAVEL', 'FLIGHT', 'AGENCY', 'SYSTEM', 'OFFICE', 'ONLINE', 'BAGGAG', 'ALLOWA', 'BOOKIN'];
     const pnrMatches = [
-      ...text.matchAll(/(?:PNR|BOOKING REFERENCE|BOOKING REF|RESERVATION CODE|RESERVATION NO|RECORD LOCATOR|CONFIRMATION|RL|BOOKING)\s*[:#\-=\s]*\s*(?:AMADEUS|GALILEO|SABRE|1A|1G|1P|1V|AIRLINE)?\s*[:#\s]*\s*(?:[A-Z0-9]{2}\/)?([A-Z0-9]{5,6})\b/gi)
+      ...text.matchAll(/(?:PNR|BOOKING REFERENCE|BOOKING REF|RESERVATION CODE|RESERVATION NO|RECORD LOCATOR|CONFIRMATION|RL)\s*[:#\-=\s]*\s*(?:AMADEUS|GALILEO|SABRE|1A|1G|1P|1V|AIRLINE)?\s*[:#\s]*\s*(?:[A-Z0-9]{2}\/)?([A-Z0-9]{5,6})\b/gi)
     ];
 
     for (const match of pnrMatches) {
@@ -469,15 +486,21 @@ export function IndividualTicketPage() {
     }
 
     if (!newData.pnr) {
-      // Fallback: look for an isolated 6 character alphanumeric that mixes letters and numbers
-      const pnrStandalone = text.match(/\b([A-Z0-9]{6})\b/gi);
-      if (pnrStandalone) {
-        for (const match of pnrStandalone) {
-           const val = match.toUpperCase();
-           if (!invalidPnrs.includes(val) && /[A-Z]/.test(val) && /[0-9]/.test(val)) {
-             newData.pnr = val;
-             break;
-           }
+      // Check LCC trailing formats like "09KVG0 Booking reference"
+      const trailingPnr = text.match(/\b([A-Z0-9]{6})\s+Booking reference/i);
+      if (trailingPnr) {
+         newData.pnr = trailingPnr[1].toUpperCase();
+      } else {
+        // Fallback: look for an isolated 6 character alphanumeric that mixes letters and numbers
+        const pnrStandalone = text.match(/\b([A-Z0-9]{6})\b/gi);
+        if (pnrStandalone) {
+          for (const match of pnrStandalone) {
+             const val = match.toUpperCase();
+             if (!invalidPnrs.includes(val) && /[A-Z]/.test(val) && /[0-9]/.test(val)) {
+               newData.pnr = val;
+               break;
+             }
+          }
         }
       }
     }
@@ -491,32 +514,32 @@ export function IndividualTicketPage() {
       newData.ticket_number = tktMatch[1].replace(/[\s-]/g, '').trim();
     }
 
-    // 4. AIRLINE DETECTION (Header vs Code Matching)
+    // 4. AIRLINE DETECTION (Header vs Code Matching vs Ticket Prefix)
     let extractedAirline = '';
     const issuingMatch = text.match(/(?:ISSUING\s+AIRLINE|AIRLINE|CARRIER)\s*[:#\-=\s]*\s*([A-Z0-9\s-]+?)(?=\s*(?:TICKET|ETKT|BOOKING|DATE|PNR|\r|\n|$))/i);
     if (issuingMatch) {
       const cand = issuingMatch[1].trim();
-      if (cand.length > 2 && !forbiddenWords.includes(cand.toUpperCase())) {
+      if (cand.length > 2 && !forbiddenWords.includes(cand.toUpperCase()) && !cand.toUpperCase().includes('NOT ')) {
         extractedAirline = cand;
       }
     }
 
     if (!extractedAirline) {
       if (/CATHAY\s*PACIFIC|\bCX\b/i.test(text)) extractedAirline = 'Cathay Pacific';
-      else if (/US-BANGLA|US BANGLA|\bBS\b/i.test(text)) extractedAirline = 'US-Bangla Airlines';
-      else if (/\b(BIMAN|BANGLADESH AIRLINES)\b/i.test(text) || (/\bBG\b/i.test(text) && !/\b[A-Z0-9]{4,5}BG\b/i.test(text))) extractedAirline = 'Biman Bangladesh Airlines';
+      else if (/US-BANGLA|US BANGLA|\bBS\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('321'))) extractedAirline = 'US-Bangla Airlines';
+      else if (/\b(BIMAN|BANGLADESH AIRLINES)\b/i.test(text) || (extractedTicket && (extractedTicket.startsWith('997') || extractedTicket.startsWith('779')))) extractedAirline = 'Biman Bangladesh Airlines';
       else if (/AIR ARABIA|\bG9\b/i.test(text)) extractedAirline = 'Air Arabia';
-      else if (/FLYDUBAI|\bFZ\b/i.test(text)) extractedAirline = 'flydubai';
-      else if (/EMIRATES|\bEK\b/i.test(text)) extractedAirline = 'Emirates';
-      else if (/SAUDIA|SAUDI ARABIAN|\bSV\b/i.test(text)) extractedAirline = 'Saudia';
-      else if (/QATAR|\bQR\b/i.test(text)) extractedAirline = 'Qatar Airways';
-      else if (/GULF AIR|\bGF\b/i.test(text)) extractedAirline = 'Gulf Air';
-      else if (/KUWAIT|\bKU\b/i.test(text)) extractedAirline = 'Kuwait Airways';
+      else if (/FLYDUBAI|\bFZ\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('141'))) extractedAirline = 'flydubai';
+      else if (/EMIRATES|\bEK\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('176'))) extractedAirline = 'Emirates';
+      else if (/SAUDIA|SAUDI ARABIAN|\bSV\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('065'))) extractedAirline = 'Saudia';
+      else if (/QATAR|\bQR\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('157'))) extractedAirline = 'Qatar Airways';
+      else if (/GULF AIR|\bGF\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('072'))) extractedAirline = 'Gulf Air';
+      else if (/KUWAIT|\bKU\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('229'))) extractedAirline = 'Kuwait Airways';
       else if (/JAZEERA|\bJ9\b/i.test(text)) extractedAirline = 'Jazeera Airways';
       else if (/SALAMAIR|\bOV\b/i.test(text)) extractedAirline = 'SalamAir';
-      else if (/MALAYSIA AIRLINES|\bMH\b/i.test(text)) extractedAirline = 'Malaysia Airlines';
-      else if (/SINGAPORE AIRLINES|\bSQ\b/i.test(text)) extractedAirline = 'Singapore Airlines';
-      else if (/THAI AIRWAYS|\bTG\b/i.test(text)) extractedAirline = 'Thai Airways';
+      else if (/MALAYSIA AIRLINES|\bMH\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('232'))) extractedAirline = 'Malaysia Airlines';
+      else if (/SINGAPORE AIRLINES|\bSQ\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('618'))) extractedAirline = 'Singapore Airlines';
+      else if (/THAI AIRWAYS|\bTG\b/i.test(text) || (extractedTicket && extractedTicket.startsWith('217'))) extractedAirline = 'Thai Airways';
       else if (/INDIGO|\b6E\b/i.test(text)) extractedAirline = 'IndiGo';
       else if (/NOVOAIR|NOVO AIR|\bVQ\b/i.test(text)) extractedAirline = 'Novoair';
       else if (/AIR ASTRA|\b2A\b/i.test(text)) extractedAirline = 'Air Astra';
@@ -556,29 +579,27 @@ export function IndividualTicketPage() {
     }
 
     // 5. ROUTE / ORIGIN & DESTINATION
-    const cityToIata: Record<string, string> = {
-      'COX\'S BAZAR': 'CXB', 'COXS BAZAR': 'CXB', 'COX BAZAR': 'CXB',
-      'CHITTAGONG': 'CGP', 'CHATOGRAM': 'CGP', 'CHATTOGRAM': 'CGP',
-      'SYLHET': 'ZYL', 'SAIDPUR': 'SPD', 'JESSORE': 'JSR', 'JASHORE': 'JSR',
-      'RAJSHAHI': 'RJH', 'BARISAL': 'BZL', 'BARISHAL': 'BZL',
-      'HONG KONG': 'HKG', 'SEOUL': 'ICN', 'INCHEON': 'ICN',
-      'JEDDAH': 'JED', 'MADINAH': 'MED', 'MEDINA': 'MED', 'RIYADH': 'RUH',
-      'DUBAI': 'DXB', 'SHARJAH': 'SHJ', 'ABU DHABI': 'AUH',
-      'KUALA LUMPUR': 'KUL', 'SINGAPORE': 'SIN', 'BANGKOK': 'BKK',
-      'DOHA': 'DOH', 'KOLKATA': 'CCU', 'DELHI': 'DEL'
-    };
-
-    const routeCodeMatch = text.match(/\b([A-Z]{3})\s*(?:\([A-Z]{3}\))?\s*(?:-|TO|\/|\u2192)\s*([A-Z]{3})\b/i);
+    let routeCodeMatch = text.match(/\b([A-Z]{3})\s*(?:\([A-Z]{3}\))?\s*(?:-|TO|\/|\u2192|\u279C|➜|➔)\s*([A-Z]{3})\b/i);
+    if (!routeCodeMatch) {
+       routeCodeMatch = text.match(/\(([A-Z]{3})\)\s*[A-Za-z]+\s*\(([A-Z]{3})\)/i);
+    }
+    
     if (routeCodeMatch) {
       newData.origin = routeCodeMatch[1].toUpperCase();
       newData.destination = routeCodeMatch[2].toUpperCase();
     } else {
-      const upperText = text.toUpperCase();
-      for (const [city, code] of Object.entries(cityToIata)) {
-        if (upperText.includes(city)) {
-          newData.destination = code;
-          break;
-        }
+      const cityCodes: Record<string, string> = {
+        'DHAKA': 'DAC', 'CHATTOGRAM': 'CGP', 'CHITTAGONG': 'CGP', 'COX': 'CXB', "COX'S BAZAR": 'CXB', 
+        'SYLHET': 'ZYL', 'JASHORE': 'JSR', 'JESSORE': 'JSR', 'SAIDPUR': 'SPD', 'RAJSHAHI': 'RJH', 'BARISHAL': 'BZL',
+        'DUBAI': 'DXB', 'SHARJAH': 'SHJ', 'ABU DHABI': 'AUH', 'DOHA': 'DOH', 'RIYADH': 'RUH', 'JEDDAH': 'JED', 
+        'KUALA LUMPUR': 'KUL', 'SINGAPORE': 'SIN', 'BANGKOK': 'BKK', 'KOLKATA': 'CCU', 'DELHI': 'DEL', 'MUMBAI': 'BOM'
+      };
+      
+      const cityNames = Object.keys(cityCodes).join('|');
+      const routeWordMatch = text.match(new RegExp(`\\b(${cityNames})\\b\\s*(?:-|TO|/|➜|➔)\\s*\\b(${cityNames})\\b`, 'i'));
+      if (routeWordMatch) {
+        newData.origin = cityCodes[routeWordMatch[1].toUpperCase()];
+        newData.destination = cityCodes[routeWordMatch[2].toUpperCase()];
       }
     }
 
@@ -592,11 +613,16 @@ export function IndividualTicketPage() {
     const issueDateMatch = text.match(/(?:DATE|ISSUED)\s*[:#\s]*\s*\d{1,2}\s+[A-Z]{3}\s+(\d{4})/i);
     if (issueDateMatch) issueYear = issueDateMatch[1];
 
-    const flightTableMatch = text.match(/\b(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i);
+    const flightTableMatch = 
+      text.match(/\b(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{2,4})\b/i) || 
+      text.match(/\b(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{2,4})?\b/i);
+
     if (flightTableMatch) {
       const day = flightTableMatch[1].padStart(2, '0');
       const month = monthNames[flightTableMatch[2].toUpperCase()];
-      newData.travel_date = issueYear + '-' + month + '-' + day;
+      let year = flightTableMatch[3] || issueYear;
+      if (year.length === 2) year = '20' + year;
+      newData.travel_date = year + '-' + month + '-' + day;
     } else {
       const dateMatch = 
         text.match(/(?:TRAVEL DATE|DEPARTURE DATE|FLIGHT DATE|DEPARTURE)\s*[:#\-=\s]*\s*(\d{1,2})[-\s/]([A-Za-z]{3})[-\s/](\d{2,4})/i) ||
