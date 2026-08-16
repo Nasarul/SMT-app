@@ -43,7 +43,10 @@ const emptyForm = {
   ticket_number: '',
   passenger_name: '',
   passport_number: '',
+  mobile: '',
+  issue_date: new Date().toISOString().split('T')[0],
   airline: '',
+  flight_number: '',
   pnr: '',
   origin: 'DAC',
   destination: '',
@@ -67,11 +70,12 @@ const emptyForm = {
 
   commission_rate: 7,
   service_charge: 0,
-  status: 'issued',
+  discount: 0,
+  status: 'issued' as 'issued' | 'hold' | 'refunded' | 'voided',
+  time_limit: '',
   supplier_id: '',
   metadata: [
     { key: 'Baggage', value: '30 KG' },
-    { key: 'Value', value: '' }
   ] as { key: string; value: string }[]
 };
 
@@ -85,8 +89,7 @@ export function IndividualTicketPage() {
   const [showForm, setShowForm] = useState(false);
   const [forms, setForms] = useState([{ ...emptyForm }]);
   const [activeTab, setActiveTab] = useState(0);
-  const [needsRecalc, setNeedsRecalc] = useState<boolean[]>([false]);
-  
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -95,6 +98,7 @@ export function IndividualTicketPage() {
   const [gdsText, setGdsText] = useState('');
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [importError, setImportError] = useState('');
+  const [invoiceData, setInvoiceData] = useState<any[] | null>(null);
 
   // Dynamic Lists
   const [airlineList, setAirlineList] = useState<string[]>(AIRLINES_FROM_DAC);
@@ -147,11 +151,11 @@ export function IndividualTicketPage() {
     const e7 = Math.max(0, Number(fData.e7) || 0);
     const g8 = Math.max(0, Number(fData.g8) || 0);
     const ts = Math.max(0, Number(fData.ts) || 0);
+    const discount = Math.max(0, Number(fData.discount) || 0);
     const customTaxSum = (fData.custom_taxes || []).reduce((acc: number, item: any) => acc + (Number(item.amount) || 0), 0);
 
     const itemizedTaxSum = bd + e5 + ow + p7 + p8 + ut + e7 + g8 + ts + customTaxSum;
 
-    // Calculate total tax and calculated total fare
     let tax_ait = itemizedTaxSum;
     if (tax_ait === 0 && total_input > base) {
       tax_ait = total_input - base;
@@ -168,45 +172,67 @@ export function IndividualTicketPage() {
     const comm_rate = Math.max(0, Number(fData.commission_rate) || 0);
     const svc = Math.max(0, Number(fData.service_charge) || 0);
 
-    // VAT 3% calculation on gross ticket margin / base fare
-    const vat = Math.round((calculated_total_fare - itemizedTaxSum) * 0.03);
     const commission = Math.round(base * (comm_rate / 100));
-    const total_commission = commission;
+
+    // AIT (BSP Bangladesh): (Total Fare − BD − UT − E5) × 0.30%
+    const ait = Math.max(0, Math.round((calculated_total_fare - bd - ut - e5) * 0.003));
+
+    // IATA Payment (BSP Net Remittance): Total − Commission − AIT
+    const iata_payment = Math.max(0, Math.round(calculated_total_fare - commission - ait));
+
+    // VAT 3% on base (kept for internal ledger)
+    const vat = Math.round((calculated_total_fare - itemizedTaxSum) * 0.03);
     const net_commission = Math.round(commission - (vat * 0.5));
-    const total_client_fare = calculated_total_fare + svc;
-    const net_profit = Math.round(commission + svc);
+
+    const total_client_fare = calculated_total_fare + svc - discount;
+    const net_profit = Math.round(commission + svc - discount);
     
     return { 
       base, 
       total_input: calculated_total_fare, 
       itemizedTaxSum,
       bd, e5, ow, p7, p8, ut, e7, g8, ts,
-      comm_rate, svc, tax_ait, vat, commission, 
-      total_commission, net_commission, total_client_fare, net_profit 
+      discount,
+      comm_rate, svc, tax_ait, vat, commission,
+      net_commission,
+      ait,
+      iata_payment,
+      total_client_fare,
+      net_profit 
     };
+
+  const isFormValid = () => {
+    return forms.every(f => 
+      f.passenger_name?.trim() && 
+      f.airline?.trim() && 
+      f.origin?.trim() && 
+      f.destination?.trim() && 
+      f.travel_date?.trim() &&
+      f.pnr?.trim()
+    );
   };
 
-  const [fareDatas, setFareDatas] = useState<any[]>([getFareData(emptyForm)]);
-
-  const handleRecalculate = () => {
-    setFareDatas(prev => {
-      const next = [...prev];
-      next[activeTab] = getFareData(forms[activeTab]);
-      return next;
-    });
-    setNeedsRecalc(prev => {
-      const next = [...prev];
-      next[activeTab] = false;
-      return next;
-    });
+  const handleClientAutofill = async (field: 'mobile' | 'passport_number', val: string) => {
+    if (!val || val.length < 5) return;
+    try {
+      const { data } = await supabase.from('customers').select('full_name').eq(field, val).single();
+      if (data && data.full_name) {
+        setForms(prev => {
+          const next = [...prev];
+          if (!next[activeTab].passenger_name) {
+             next[activeTab] = { ...next[activeTab], passenger_name: data.full_name };
+          }
+          return next;
+        });
+        setSuccess('Customer found! Name auto-filled.');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (e) {
+      // Not found, ignore
+    }
   };
 
   const handleSave = async () => {
-    if (needsRecalc.some(r => r)) {
-      setError('Please click Recalculate for all pending tabs before saving.');
-      return;
-    }
-    
     for (let i = 0; i < forms.length; i++) {
       const f = forms[i];
       if (!f.passenger_name || !f.airline || !f.origin || !f.destination || !f.travel_date) {
@@ -219,14 +245,21 @@ export function IndividualTicketPage() {
     setSaving(true);
     setError('');
     
-    const payloads = forms.map((f, i) => {
-      const fd = fareDatas[i];
+    const payloads = forms.map((f) => {
+      const fd = getFareData(f);
       const cost_fare = fd.total_client_fare - fd.net_profit;
       const combinedTaxes = {
         category: f.ticket_category,
         ticketing_source: f.ticketing_source,
         ut: f.ut, bd: f.bd, e5: f.e5, ow: f.ow, p7: f.p7, p8: f.p8, e7: f.e7, g8: f.g8, ts: f.ts,
         custom_taxes: f.custom_taxes || [],
+        mobile: f.mobile || '',
+        issue_date: f.issue_date || '',
+        time_limit: f.time_limit || '',
+        flight_number: f.flight_number || '',
+        discount: f.discount || 0,
+        ait: fd.ait,
+        iata_payment: fd.iata_payment,
         metadata: f.metadata || []
       };
 
@@ -243,7 +276,7 @@ export function IndividualTicketPage() {
         cabin_class: f.cabin_class,
         base_fare: fd.base,
         tax_amount: fd.vat,
-        ait_amount: fd.tax_ait,
+        ait_amount: fd.ait,
         service_charge: fd.svc,
         total_fare: fd.total_client_fare,
         cost_fare: cost_fare,
@@ -261,10 +294,9 @@ export function IndividualTicketPage() {
       setError(err.message);
     } else {
       setSuccess(`${forms.length} Ticket(s) issued successfully!`);
+      setInvoiceData(payloads);
       setShowForm(false);
       setForms([{ ...emptyForm }]);
-      setFareDatas([getFareData(emptyForm)]);
-      setNeedsRecalc([false]);
       setActiveTab(0);
       loadTickets();
     }
@@ -278,21 +310,12 @@ export function IndividualTicketPage() {
     t.airline?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const fareFields = ['base_fare', 'total_fare_input', 'ut', 'bd', 'e5', 'ow', 'p7', 'p8', 'e7', 'g8', 'ts', 'commission_rate', 'service_charge'];
-  
   const updateActiveForm = (field: string, val: any) => {
     setForms(prev => {
       const next = [...prev];
       next[activeTab] = { ...next[activeTab], [field]: val };
       return next;
     });
-    if (fareFields.includes(field)) {
-      setNeedsRecalc(prev => {
-        const next = [...prev];
-        next[activeTab] = true;
-        return next;
-      });
-    }
   };
 
   const addCustomTaxField = () => {
@@ -300,11 +323,6 @@ export function IndividualTicketPage() {
       const next = [...prev];
       const list = [...(next[activeTab].custom_taxes || []), { code: '', amount: 0 }];
       next[activeTab] = { ...next[activeTab], custom_taxes: list };
-      return next;
-    });
-    setNeedsRecalc(prev => {
-      const next = [...prev];
-      next[activeTab] = true;
       return next;
     });
   };
@@ -317,11 +335,6 @@ export function IndividualTicketPage() {
       next[activeTab] = { ...next[activeTab], custom_taxes: list };
       return next;
     });
-    setNeedsRecalc(prev => {
-      const next = [...prev];
-      next[activeTab] = true;
-      return next;
-    });
   };
 
   const removeCustomTaxField = (idx: number) => {
@@ -332,11 +345,6 @@ export function IndividualTicketPage() {
       next[activeTab] = { ...next[activeTab], custom_taxes: list };
       return next;
     });
-    setNeedsRecalc(prev => {
-      const next = [...prev];
-      next[activeTab] = true;
-      return next;
-    });
   };
 
   const copyFlightDetailsToNewPassenger = () => {
@@ -345,11 +353,10 @@ export function IndividualTicketPage() {
       ...currentForm,
       passenger_name: '',
       passport_number: '',
+      mobile: '',
       ticket_number: ''
     };
     setForms(prev => [...prev, clonedForm]);
-    setFareDatas(prev => [...prev, getFareData(clonedForm)]);
-    setNeedsRecalc(prev => [...prev, false]);
     setActiveTab(forms.length);
   };
 
@@ -384,16 +391,12 @@ export function IndividualTicketPage() {
 
   const addNewPassengerTab = () => {
     setForms(prev => [...prev, { ...emptyForm }]);
-    setFareDatas(prev => [...prev, getFareData(emptyForm)]);
-    setNeedsRecalc(prev => [...prev, false]);
     setActiveTab(forms.length);
   };
 
   const removePassengerTab = (indexToRemove: number) => {
     if (forms.length <= 1) return;
     setForms(prev => prev.filter((_, i) => i !== indexToRemove));
-    setFareDatas(prev => prev.filter((_, i) => i !== indexToRemove));
-    setNeedsRecalc(prev => prev.filter((_, i) => i !== indexToRemove));
     setActiveTab(prev => (prev >= indexToRemove ? Math.max(0, prev - 1) : prev));
   };
 
@@ -727,8 +730,6 @@ export function IndividualTicketPage() {
     }
 
     setForms([newData]);
-    setFareDatas([getFareData(newData)]);
-    setNeedsRecalc([false]);
     setActiveTab(0);
     
     setShowImportModal(false);
@@ -869,8 +870,6 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
         }));
 
         setForms(newForms);
-        setFareDatas(newForms.map(f => getFareData(f)));
-        setNeedsRecalc(newForms.map(() => false));
         setActiveTab(0);
 
         setShowImportModal(false);
@@ -892,8 +891,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
   };
 
   const form = forms[activeTab] || emptyForm;
-  const fareData = fareDatas[activeTab] || getFareData(emptyForm);
-  const currentNeedsRecalc = needsRecalc[activeTab] || false;
+  const fareData = getFareData(form);
 
   return (
     <div className="p-4 lg:p-6 animate-fade-in">
@@ -1029,7 +1027,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
       </div>
 
       {/* Issue Ticket Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Issue Air Ticket (Retail & Multi-Passenger)" size="xl">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Issue Air Ticket" size="xl">
         <div className="space-y-3 max-h-[82vh] overflow-y-auto pr-1">
           
           {/* Sticky Top Header: Multi-Passenger Tabs & Clone Options */}
@@ -1044,32 +1042,24 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                     👤 {f.passenger_name || `Passenger ${i+1}`}
                   </button>
                   {forms.length > 1 && (
-                    <button 
-                      onClick={() => removePassengerTab(i)}
-                      className="pr-2 pl-1 text-neutral-400 hover:text-error-500 font-bold"
-                    >
-                      &times;
-                    </button>
+                    <button onClick={() => removePassengerTab(i)} className="pr-2 pl-1 text-neutral-400 hover:text-error-500 font-bold">&times;</button>
                   )}
                 </div>
               ))}
-              <button 
-                onClick={addNewPassengerTab}
-                className="px-3 py-1.5 text-xs text-primary-600 font-semibold hover:bg-primary-50 rounded-t-lg flex items-center gap-1 border-b-2 border-transparent"
-              >
+              <button onClick={addNewPassengerTab} className="px-3 py-1.5 text-xs text-primary-600 font-semibold hover:bg-primary-50 rounded-t-lg flex items-center gap-1 border-b-2 border-transparent">
                 <Plus size={12} /> Add Passenger
               </button>
             </div>
-
-            {forms.length > 0 && (
-              <button
-                onClick={copyFlightDetailsToNewPassenger}
-                className="text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-200 flex items-center gap-1 transition-colors shrink-0 shadow-sm"
-                title="Copy current flight route & fare to new passenger tab under same PNR"
-              >
-                📋 Copy Route to New Pax
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {forms.length > 0 && (
+                <button onClick={copyFlightDetailsToNewPassenger} className="text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-200 flex items-center gap-1 transition-colors shadow-sm" title="Copy current flight route to new passenger tab">
+                  📋 Copy Route
+                </button>
+              )}
+              <span className="text-[11px] font-mono font-bold text-primary-700 bg-primary-100/80 px-2.5 py-0.5 rounded-md border border-primary-300">
+                PNR: {form.pnr || 'NOT SET'}
+              </span>
+            </div>
           </div>
 
           {error && (
@@ -1078,168 +1068,153 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             </div>
           )}
 
-          {/* Ticketing Source & Auto-Parser Block */}
-          <div className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 p-3 rounded-xl border border-blue-100/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">Platform / Ticketing Source</span>
-              <div className="flex items-center gap-4">
-                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer" title="Individual e-Tickets per Passenger">
-                  <input
-                    type="radio"
-                    name={`ticketing_src_${activeTab}`}
-                    checked={form.ticketing_source === 'gds'}
-                    onChange={() => updateActiveForm('ticketing_source', 'gds')}
-                    className="text-indigo-600 focus:ring-indigo-500"
-                  />
-                  🌐 GDS (Sabre/Amadeus)
+          {/* Platform & Category Header */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-xl border border-blue-100 flex flex-col sm:flex-row gap-3 justify-between items-start">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider w-20 shrink-0">Platform:</span>
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                  <input type="radio" name={`platform_${activeTab}`} checked={form.ticketing_source === 'gds'} onChange={() => updateActiveForm('ticketing_source', 'gds')} className="text-indigo-600 focus:ring-indigo-500" />
+                  🌐 GDS (Sabre/Amadeus/Galileo)
                 </label>
-                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer" title="Shared PNR for multiple passengers">
-                  <input
-                    type="radio"
-                    name={`ticketing_src_${activeTab}`}
-                    checked={form.ticketing_source === 'non_gds'}
-                    onChange={() => updateActiveForm('ticketing_source', 'non_gds')}
-                    className="text-indigo-600 focus:ring-indigo-500"
-                  />
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                  <input type="radio" name={`platform_${activeTab}`} checked={form.ticketing_source === 'non_gds'} onChange={() => updateActiveForm('ticketing_source', 'non_gds')} className="text-indigo-600 focus:ring-indigo-500" />
                   ✈️ Non-GDS (LCC/Portal)
                 </label>
               </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider w-20 shrink-0">Category:</span>
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                  <input type="radio" name={`cat_${activeTab}`} checked={form.ticket_category === 'domestic'} onChange={() => updateActiveForm('ticket_category', 'domestic')} className="text-primary-600 focus:ring-primary-500" />
+                  🏠 Domestic (অভ্যন্তরীণ)
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                  <input type="radio" name={`cat_${activeTab}`} checked={form.ticket_category === 'international'} onChange={() => updateActiveForm('ticket_category', 'international')} className="text-primary-600 focus:ring-primary-500" />
+                  🌍 International (আন্তর্জাতিক)
+                </label>
+              </div>
             </div>
-            
-            <div className="flex flex-col gap-1 sm:text-right">
-              <span className="text-[10px] text-indigo-700 font-semibold">Fast Data Entry? Auto-detect PNR & Pax</span>
-              <button 
-                onClick={() => { setShowForm(false); setShowImportModal(true); }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-              >
-                <Download size={14} /> Import GDS PDF/Text
-              </button>
-            </div>
+            <button onClick={() => { setShowForm(false); setShowImportModal(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm shrink-0">
+              <Download size={14} /> Import GDS Text
+            </button>
           </div>
 
-          {/* Top Bar: Ticket Category & PNR Quick Badge */}
-          <div className="bg-gradient-to-r from-neutral-50 via-primary-50/20 to-neutral-50 p-2.5 rounded-xl border border-neutral-200 flex items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-neutral-700">Ticket Category:</span>
-              <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
-                <input
-                  type="radio"
-                  name={`ticket_cat_${activeTab}`}
-                  checked={form.ticket_category === 'domestic'}
-                  onChange={() => updateActiveForm('ticket_category', 'domestic')}
-                  className="text-primary-600 focus:ring-primary-500"
-                />
-                🏠 Domestic (অভ্যন্তরীণ)
-              </label>
-              <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
-                <input
-                  type="radio"
-                  name={`ticket_cat_${activeTab}`}
-                  checked={form.ticket_category === 'international'}
-                  onChange={() => updateActiveForm('ticket_category', 'international')}
-                  className="text-primary-600 focus:ring-primary-500"
-                />
-                ✈️ International (আন্তর্জাতিক)
-              </label>
+          {/* ─── Step 1: Passenger & Reservation Info ─── */}
+          <div className="card p-3 border border-blue-100 bg-blue-50/20 space-y-2.5 shadow-xs rounded-xl">
+            <div className="text-[11px] font-bold text-blue-700 uppercase tracking-wider border-b border-blue-100 pb-1.5">
+              👤 Step 1 — যাত্রীর তথ্য (Passenger Info)
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-neutral-500">PNR Badge:</span>
-              <span className="text-xs font-mono font-bold text-primary-700 bg-primary-100/80 px-2.5 py-0.5 rounded-md border border-primary-300">
-                {form.pnr || 'NOT SET'}
-              </span>
-            </div>
-          </div>
-
-          {/* Section 1: Passenger & Reservation Information */}
-          <div className="card p-3 border border-neutral-200 bg-white space-y-2.5 shadow-xs">
-            <div className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider border-b border-neutral-100 pb-1 flex items-center gap-1.5">
-              <span>👤 Passenger & Reservation Information</span>
-            </div>
-            <div className="grid grid-cols-12 gap-3">
+            <div className="grid grid-cols-12 gap-2">
               <div className="col-span-12 sm:col-span-4">
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passenger Name *</label>
-                <input className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport / ticket" />
-              </div>
-              <div className="col-span-6 sm:col-span-2">
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">PNR Code *</label>
-                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase font-bold text-primary-700" value={form.pnr} onChange={e => updateActiveForm('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
-              </div>
-              <div className="col-span-6 sm:col-span-3">
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ticket Number</label>
-                <input className="input-field py-1.5 px-2.5 text-xs font-mono font-semibold" value={form.ticket_number || ''} onChange={e => updateActiveForm('ticket_number', e.target.value)} placeholder="13-digit Ticket No." />
+                <input className={`input-field py-1.5 px-2.5 text-xs font-medium ${!form.passenger_name?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.passenger_name} onChange={e => updateActiveForm('passenger_name', e.target.value)} placeholder="As per passport / ticket" />
               </div>
               <div className="col-span-6 sm:col-span-3">
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Passport Number</label>
-                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} placeholder="Passport No." />
+                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase" value={form.passport_number} onChange={e => updateActiveForm('passport_number', e.target.value.toUpperCase())} onBlur={(e) => handleClientAutofill('passport_number', e.target.value)} placeholder="Passport No." />
               </div>
+              <div className="col-span-6 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Mobile Number</label>
+                <input className="input-field py-1.5 px-2.5 text-xs" value={form.mobile || ''} onChange={e => updateActiveForm('mobile', e.target.value)} onBlur={(e) => handleClientAutofill('mobile', e.target.value)} placeholder="01XXXXXXXXX" />
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Issue Date</label>
+                <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.issue_date || ''} onChange={e => updateActiveForm('issue_date', e.target.value)} />
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">PNR / Booking Ref *</label>
+                <input className={`input-field py-1.5 px-2.5 text-xs font-mono uppercase font-bold text-primary-700 ${!form.pnr?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.pnr} onChange={e => updateActiveForm('pnr', e.target.value.toUpperCase())} placeholder="6-char PNR" />
+              </div>
+              <div className={`col-span-8 ${form.status === 'hold' ? 'sm:col-span-4' : 'sm:col-span-7'}`}>
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ticket Number (e-Ticket)</label>
+                <input className="input-field py-1.5 px-2.5 text-xs font-mono font-semibold" value={form.ticket_number || ''} onChange={e => updateActiveForm('ticket_number', e.target.value)} placeholder="13-digit e-Ticket Number" />
+              </div>
+              <div className="col-span-4 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ticket Status</label>
+                <select className="input-field py-1.5 px-2.5 text-xs capitalize" value={form.status} onChange={e => updateActiveForm('status', e.target.value)}>
+                  <option value="issued">Issued</option>
+                  <option value="hold">Hold</option>
+                  <option value="voided">Voided</option>
+                  <option value="refunded">Refunded</option>
+                  <option value="reissued">Reissued</option>
+                </select>
+              </div>
+              {form.status === 'hold' && (
+                <div className="col-span-12 sm:col-span-3">
+                  <label className="text-[10px] font-semibold text-warning-600 mb-1 block">Time Limit (TTL)</label>
+                  <input type="datetime-local" className="input-field py-1.5 px-2.5 text-xs font-bold text-warning-700 border-warning-300" value={form.time_limit || ''} onChange={e => updateActiveForm('time_limit', e.target.value)} />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Section 2: Flight Route & Schedule Information */}
-          <div className="card p-3 border border-neutral-200 bg-white space-y-2.5 shadow-xs">
-            <div className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider border-b border-neutral-100 pb-1 flex items-center gap-1.5">
-              <span>✈️ Flight Route & Schedule Details</span>
+          {/* ─── Step 2: Flight Details ─── */}
+          <div className="card p-3 border border-emerald-100 bg-emerald-50/20 space-y-2.5 shadow-xs rounded-xl">
+            <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider border-b border-emerald-100 pb-1.5">
+              ✈️ Step 2 — ফ্লাইট তথ্য (Flight Details)
             </div>
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-12 sm:col-span-3">
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Operating Airline *</label>
-                <select className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.airline} onChange={e => updateActiveForm('airline', e.target.value)}>
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-12 sm:col-span-4">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Airline Name *</label>
+                <select className={`input-field py-1.5 px-2.5 text-xs font-medium ${!form.airline?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.airline} onChange={e => updateActiveForm('airline', e.target.value)}>
                   <option value="">Select airline</option>
                   {airlineList.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div className="col-span-6 sm:col-span-2">
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Origin (Default DAC) *</label>
-                <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold text-primary-700" value={form.origin || 'DAC'} onChange={e => updateActiveForm('origin', e.target.value)}>
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Flight No.</label>
+                <input className="input-field py-1.5 px-2.5 text-xs font-mono uppercase font-semibold" value={form.flight_number || ''} onChange={e => updateActiveForm('flight_number', e.target.value.toUpperCase())} placeholder="e.g. BG-001" />
+              </div>
+              <div className="col-span-6 sm:col-span-2">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Origin *</label>
+                <select className={`input-field py-1.5 px-2.5 text-xs font-mono font-bold text-primary-700 ${!form.origin?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.origin || 'DAC'} onChange={e => updateActiveForm('origin', e.target.value)}>
                   {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code} - {ap.city}</option>)}
                 </select>
               </div>
               <div className="col-span-6 sm:col-span-2">
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Destination *</label>
-                <select className="input-field py-1.5 px-2.5 text-xs font-mono font-bold text-primary-700" value={form.destination} onChange={e => updateActiveForm('destination', e.target.value)}>
+                <select className={`input-field py-1.5 px-2.5 text-xs font-mono font-bold text-primary-700 ${!form.destination?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.destination} onChange={e => updateActiveForm('destination', e.target.value)}>
                   <option value="">Select Dest.</option>
                   {airportList.map(ap => <option key={ap.code} value={ap.code}>{ap.code} - {ap.city}</option>)}
                 </select>
               </div>
               <div className="col-span-6 sm:col-span-2">
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Travel Date *</label>
-                <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.travel_date} onChange={e => updateActiveForm('travel_date', e.target.value)} />
-              </div>
-              <div className="col-span-6 sm:col-span-2">
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Return Date</label>
-                <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.return_date} onChange={e => updateActiveForm('return_date', e.target.value)} />
-              </div>
-              <div className="col-span-12 sm:col-span-1">
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Class</label>
                 <select className="input-field py-1.5 px-2.5 text-xs capitalize" value={form.cabin_class} onChange={e => updateActiveForm('cabin_class', e.target.value)}>
-                  <option value="economy">Eco</option>
-                  <option value="premium_economy">Prem</option>
-                  <option value="business">Biz</option>
+                  <option value="economy">Economy</option>
+                  <option value="premium_economy">Premium Eco</option>
+                  <option value="business">Business</option>
                   <option value="first">First</option>
                 </select>
               </div>
             </div>
-            <div className="pt-1 flex items-center justify-between text-xs border-t border-neutral-50">
-              <div className="flex items-center gap-2">
-                <label className="text-[10px] font-semibold text-neutral-500 block">Supplier / Vendor Source:</label>
-                <select className="input-field py-1 px-2 text-xs w-48 font-medium" value={form.supplier_id} onChange={e => updateActiveForm('supplier_id', e.target.value)}>
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-6 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Departure Date *</label>
+                <input type="date" className={`input-field py-1.5 px-2.5 text-xs ${!form.travel_date?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.travel_date} onChange={e => updateActiveForm('travel_date', e.target.value)} />
+              </div>
+              <div className="col-span-6 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Return Date</label>
+                <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.return_date} onChange={e => updateActiveForm('return_date', e.target.value)} />
+              </div>
+              <div className="col-span-12 sm:col-span-6">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Supplier / Vendor</label>
+                <select className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.supplier_id} onChange={e => updateActiveForm('supplier_id', e.target.value)}>
                   <option value="">Direct / GDS / Self</option>
-                  {suppliers.map(s => (
-                    <option key={s.id} value={s.id}>{s.company_name}</option>
-                  ))}
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.company_name}</option>)}
                 </select>
               </div>
             </div>
           </div>
 
-          {/* Section 3: Financial Fares & Commission Inputs */}
-          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200 space-y-2 shadow-xs">
-            <div className="flex justify-between items-center border-b border-neutral-200 pb-1">
-              <span className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider">💰 Base Financials & Commission</span>
-              <span className="text-[10px] text-neutral-500 font-semibold">Enter Base & Total Ticket Fare</span>
+          {/* ─── Step 3: Fare & Financials ─── */}
+          <div className="bg-amber-50/30 p-3 rounded-xl border border-amber-100 space-y-3 shadow-xs">
+            <div className="text-[11px] font-bold text-amber-700 uppercase tracking-wider border-b border-amber-100 pb-1.5">
+              💰 Step 3 — মূল্য ও কমিশন (Fare & Financials)
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            {/* Main Fare Inputs */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               <div>
                 <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Base Fare (BDT) *</label>
                 <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-bold text-neutral-800" value={form.base_fare} onChange={e => updateActiveForm('base_fare', e.target.value)} placeholder="0" />
@@ -1249,196 +1224,154 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                 <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-bold text-primary-700" value={form.total_fare_input} onChange={e => updateActiveForm('total_fare_input', e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Comm. (%)</label>
-                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-neutral-800" value={form.commission_rate} onChange={e => updateActiveForm('commission_rate', e.target.value)} placeholder="7" />
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Commission (%)</label>
+                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold" value={form.commission_rate} onChange={e => updateActiveForm('commission_rate', e.target.value)} placeholder="7" />
               </div>
+            </div>
+
+            {/* Tax Breakdown (compact inline grid) */}
+            <div className="bg-white/80 rounded-lg p-2 border border-amber-100">
+              <div className="text-[9px] font-bold text-neutral-400 uppercase mb-2 tracking-wider">
+                Tax Breakdown — {form.ticket_category === 'international' ? 'International (BD, UT, E5, OW, P7, P8, E7, G8, TS)' : 'Domestic (BD, UT, E5)'}
+              </div>
+              <div className={`grid gap-1.5 ${form.ticket_category === 'international' ? 'grid-cols-5 sm:grid-cols-9' : 'grid-cols-3'}`}>
+                {[
+                  { key: 'bd', label: 'BD' }, { key: 'ut', label: 'UT' }, { key: 'e5', label: 'E5' },
+                  ...(form.ticket_category === 'international' ? [
+                    { key: 'ow', label: 'OW' }, { key: 'p7', label: 'P7' }, { key: 'p8', label: 'P8' },
+                    { key: 'e7', label: 'E7' }, { key: 'g8', label: 'G8' }, { key: 'ts', label: 'TS' }
+                  ] : [])
+                ].map(t => (
+                  <div key={t.key}>
+                    <label className="text-[9px] font-bold text-neutral-400 block text-center">{t.label}</label>
+                    <input type="number" min="0" className="input-field py-1 px-1 text-xs text-center font-semibold text-neutral-700" value={(form as any)[t.key]} onChange={e => updateActiveForm(t.key, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+              {form.custom_taxes && form.custom_taxes.length > 0 && (
+                <div className="mt-2 space-y-1.5 pt-1.5 border-t border-neutral-100">
+                  {form.custom_taxes.map((ct, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input className="input-field py-1 px-2 text-xs font-mono font-bold w-20 bg-neutral-50" placeholder="Code" value={ct.code} onChange={e => updateCustomTaxField(idx, 'code', e.target.value)} />
+                      <input type="number" min="0" className="input-field py-1 px-2 text-xs font-semibold flex-1" placeholder="Amount" value={ct.amount} onChange={e => updateCustomTaxField(idx, 'amount', e.target.value)} />
+                      <button type="button" onClick={() => removeCustomTaxField(idx)} className="text-error-400 hover:text-error-600 p-1 rounded"><Trash2 size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button type="button" onClick={addCustomTaxField} className="mt-2 text-[10px] font-bold text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                <Plus size={10} /> Add Custom Tax Code
+              </button>
+            </div>
+
+            {/* Service Charge & Discount */}
+            <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Service Charge (BDT)</label>
                 <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-success-700" value={form.service_charge} onChange={e => updateActiveForm('service_charge', e.target.value)} placeholder="0" />
               </div>
-            </div>
-          </div>
-
-          {/* Section 4: Itemized Tax Breakdown Grid */}
-          <div className="card p-3 border border-neutral-200 space-y-2 bg-white shadow-xs">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-1.5">
-              <span className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1">
-                💸 Itemized Tax Breakdown {form.ticket_category === 'international' ? '(BD, E5, OW, P7, P8, UT, E7, G8, TS)' : '(BD, UT, E5)'}
-              </span>
-              <button
-                type="button"
-                onClick={addCustomTaxField}
-                className="text-[11px] font-bold text-primary-600 hover:text-primary-700 flex items-center gap-1"
-              >
-                <Plus size={12} /> Add Custom Tax Code
-              </button>
+              <div>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Discount (BDT)</label>
+                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-orange-600" value={form.discount || 0} onChange={e => updateActiveForm('discount', e.target.value)} placeholder="0" />
+              </div>
             </div>
 
-            {/* Standard Taxes Grid */}
-            <div className="grid grid-cols-3 sm:grid-cols-9 gap-2">
-              <div>
-                <label className="text-[9px] font-bold text-neutral-500 block uppercase">BD Tax</label>
-                <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.bd} onChange={e => updateActiveForm('bd', e.target.value)} />
-              </div>
-              <div>
-                <label className="text-[9px] font-bold text-neutral-500 block uppercase">E5 Tax</label>
-                <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.e5} onChange={e => updateActiveForm('e5', e.target.value)} />
-              </div>
-              <div>
-                <label className="text-[9px] font-bold text-neutral-500 block uppercase">UT Tax</label>
-                <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.ut} onChange={e => updateActiveForm('ut', e.target.value)} />
-              </div>
-              {form.ticket_category === 'international' && (
-                <>
-                  <div>
-                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">OW Tax</label>
-                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.ow} onChange={e => updateActiveForm('ow', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">P7 Tax</label>
-                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.p7} onChange={e => updateActiveForm('p7', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">P8 Tax</label>
-                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.p8} onChange={e => updateActiveForm('p8', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">E7 Tax</label>
-                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.e7} onChange={e => updateActiveForm('e7', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">G8 Tax</label>
-                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.g8} onChange={e => updateActiveForm('g8', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-neutral-500 block uppercase">TS Tax</label>
-                    <input type="number" min="0" className="input-field py-1 px-1.5 text-xs font-semibold text-neutral-700" value={form.ts} onChange={e => updateActiveForm('ts', e.target.value)} />
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Custom Tax Codes List */}
-            {form.custom_taxes && form.custom_taxes.length > 0 && (
-              <div className="space-y-1.5 pt-1 border-t border-neutral-100">
-                <span className="text-[10px] font-bold text-neutral-500 uppercase">Additional Custom Tax Codes:</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {form.custom_taxes.map((ct, idx) => (
-                    <div key={idx} className="flex gap-2 items-center bg-neutral-50 p-1.5 rounded-lg border border-neutral-200">
-                      <input
-                        className="input-field py-1 px-2 text-xs font-mono font-bold w-1/3 bg-white"
-                        placeholder="Tax Code (e.g. YQ)"
-                        value={ct.code}
-                        onChange={e => updateCustomTaxField(idx, 'code', e.target.value)}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        className="input-field py-1 px-2 text-xs font-semibold flex-1 bg-white"
-                        placeholder="Amount"
-                        value={ct.amount}
-                        onChange={e => updateCustomTaxField(idx, 'amount', e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCustomTaxField(idx)}
-                        className="text-error-400 hover:text-error-600 p-1 rounded"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))}
+            {/* Auto-Calculated Results Panel (BSP Bangladesh) */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-3 space-y-2.5">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">⚡ Auto-Calculated (BSP Bangladesh)</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="bg-white/5 rounded-lg px-3 py-2 border border-white/10">
+                  <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">AIT (0.30%)</div>
+                  <div className="text-sm font-black text-yellow-300">{formatBDT(fareData.ait)}</div>
+                  <div className="text-[8px] text-slate-500 mt-0.5">(Total−BD−UT−E5)×0.3%</div>
+                </div>
+                <div className="bg-white/5 rounded-lg px-3 py-2 border border-white/10">
+                  <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Commission</div>
+                  <div className="text-sm font-black text-blue-300">{formatBDT(fareData.commission)}</div>
+                  <div className="text-[8px] text-slate-500 mt-0.5">Base × {fareData.comm_rate}%</div>
+                </div>
+                <div className="bg-white/5 rounded-lg px-3 py-2 border border-white/10">
+                  <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">IATA Payment</div>
+                  <div className="text-sm font-black text-orange-300">{formatBDT(fareData.iata_payment)}</div>
+                  <div className="text-[8px] text-slate-500 mt-0.5">Total−Comm−AIT</div>
+                </div>
+                <div className="bg-white/5 rounded-lg px-3 py-2 border border-white/10">
+                  <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Net Profit</div>
+                  <div className="text-sm font-black text-green-300">{formatBDT(fareData.net_profit)}</div>
+                  <div className="text-[8px] text-slate-500 mt-0.5">Comm+Svc−Disc</div>
                 </div>
               </div>
-            )}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-primary-600 rounded-lg px-4 py-2.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-primary-200 uppercase tracking-wider">Client Total Fare</div>
+                    <div className="text-lg font-black text-white">{formatBDT(fareData.total_client_fare)}</div>
+                  </div>
+                  <span className="text-3xl opacity-10 font-black">৳</span>
+                </div>
+                <div className="bg-emerald-700 rounded-lg px-4 py-2.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">IATA Payment</div>
+                    <div className="text-lg font-black text-white">{formatBDT(fareData.iata_payment)}</div>
+                  </div>
+                  <span className="text-3xl opacity-10 font-black">↗</span>
+                </div>
+              </div>
+            </div>
           </div>
-          
-          {/* Section 5: Baggage & Extra Info */}
-          <div className="bg-white border border-neutral-200 rounded-xl p-3 shadow-xs">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-[11px] font-bold text-neutral-600 uppercase">Dynamic Fields (Baggage, Meal & Extra Specs)</h3>
+
+          {/* ─── Step 4: Dynamic Fields ─── */}
+          <div className="bg-white border border-purple-100 rounded-xl p-3 shadow-xs space-y-2">
+            <div className="flex justify-between items-center border-b border-purple-50 pb-1.5">
+              <h3 className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">🧳 Step 4 — Dynamic Fields (Baggage, Meal & Extra)</h3>
               <button onClick={addMetadataField} className="text-[11px] text-primary-600 font-semibold flex items-center gap-1 hover:underline">
-                <Plus size={12} /> Add Custom Field
+                <Plus size={12} /> Add Field
               </button>
             </div>
             {(!form.metadata || form.metadata.length === 0) && (
-               <p className="text-xs text-neutral-400 italic">No custom fields added. E.g. Baggage, Meal Preference, Seat.</p>
+              <p className="text-xs text-neutral-400 italic">No fields added. E.g. Baggage: 30 KG, Meal: Standard, Seat: 22A</p>
             )}
             {form.metadata?.map((meta, idx) => (
-              <div key={idx} className="flex gap-2 mb-1.5">
-                <input 
-                  className="input-field py-1 px-2.5 text-xs w-1/3 bg-neutral-50 font-semibold" 
-                  placeholder="Field Name (e.g. Baggage / Value)" 
-                  value={meta.key} 
-                  onChange={e => updateMetadata(idx, 'key', e.target.value)} 
-                />
-                <input 
-                  className="input-field py-1 px-2.5 text-xs flex-1" 
-                  placeholder="Value (e.g. 30 KG / 2 Pieces)" 
-                  value={meta.value} 
-                  onChange={e => updateMetadata(idx, 'value', e.target.value)} 
-                />
-                <button 
-                  onClick={() => removeMetadataField(idx)} 
-                  className="text-error-400 hover:text-error-600 p-1 hover:bg-error-50 rounded transition-colors"
+              <div key={idx} className="flex gap-2 items-center">
+                <select
+                  className="input-field py-1 px-2 text-xs w-36 bg-neutral-50 font-semibold"
+                  value={meta.key}
+                  onChange={e => updateMetadata(idx, 'key', e.target.value)}
                 >
+                  <option value="">Select Field</option>
+                  <option value="Baggage">🧳 Baggage</option>
+                  <option value="Meal">🍽️ Meal</option>
+                  <option value="Seat">💺 Seat</option>
+                  <option value="Transit Visa">🛂 Transit Visa</option>
+                  <option value="Lounge">🛋️ Lounge</option>
+                  <option value="Special Assistance">♿ Special Assist</option>
+                  <option value="Remarks">📝 Remarks</option>
+                  {meta.key && !['Baggage','Meal','Seat','Transit Visa','Lounge','Special Assistance','Remarks'].includes(meta.key) && (
+                    <option value={meta.key}>{meta.key}</option>
+                  )}
+                </select>
+                <input
+                  className="input-field py-1 px-2.5 text-xs flex-1"
+                  placeholder="Value (e.g. 30 KG / Standard / 22A)"
+                  value={meta.value}
+                  onChange={e => updateMetadata(idx, 'value', e.target.value)}
+                />
+                <button onClick={() => removeMetadataField(idx)} className="text-error-400 hover:text-error-600 p-1 hover:bg-error-50 rounded transition-colors shrink-0">
                   <Trash2 size={14} />
                 </button>
               </div>
             ))}
           </div>
 
-          {/* Section 6: Calculation Results & Financial Totals */}
-          <div className="flex justify-between items-end mb-1 mt-1">
-             <h3 className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider">Calculation Results & Financial Totals</h3>
-             <button 
-                onClick={handleRecalculate}
-                disabled={!currentNeedsRecalc}
-                className={`py-1.5 px-4 text-xs font-bold rounded-lg transition-colors shadow-sm ${currentNeedsRecalc ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}`}
-             >
-               {currentNeedsRecalc ? 'Click to Recalculate' : 'Up to date'}
-             </button>
-          </div>
-          <div className={`flex flex-col md:flex-row gap-3 p-3 rounded-xl border transition-all ${currentNeedsRecalc ? 'bg-neutral-50 border-neutral-200 opacity-60' : 'bg-primary-50/50 border-primary-100'}`}>
-            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Total Tax / AIT</span>
-                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.tax_ait)}</span>
-              </div>
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>VAT (3%)</span>
-                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.vat)}</span>
-              </div>
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Total Comm.</span>
-                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.total_commission)}</span>
-              </div>
-              <div className={`bg-white px-3 py-2 rounded-lg border flex flex-col justify-center ${currentNeedsRecalc ? 'border-neutral-200' : 'border-primary-100/50'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-400'}`}>Net Comm.</span>
-                <span className={`text-xs font-bold ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-900'}`}>{currentNeedsRecalc ? '---' : formatBDT(fareData.net_commission)}</span>
-              </div>
-            </div>
-            
-            <div className="flex items-stretch gap-2 shrink-0">
-              <div className={`px-4 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-primary-600 text-white'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-primary-200'}`}>Client Fare</span>
-                <span className="text-sm font-black">{currentNeedsRecalc ? '---' : formatBDT(fareData.total_client_fare)}</span>
-              </div>
-              <div className={`px-4 py-2 rounded-lg text-right flex flex-col justify-center shadow-sm ${currentNeedsRecalc ? 'bg-neutral-300 text-neutral-500' : 'bg-success-600 text-white'}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-wider block mb-0.5 ${currentNeedsRecalc ? 'text-neutral-400' : 'text-success-200'}`}>Net Profit</span>
-                <span className="text-sm font-black">{currentNeedsRecalc ? '---' : formatBDT(fareData.net_profit)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 justify-end pt-2 border-t border-neutral-100 mt-1">
+          {/* Footer Actions */}
+          <div className="flex gap-3 justify-end pt-2 border-t border-neutral-100 mt-1 sticky bottom-0 bg-white pb-1">
             <button onClick={() => setShowForm(false)} className="btn-ghost py-2 px-6 text-xs font-bold">Discard</button>
-            <button 
-              onClick={handleSave} 
-              disabled={saving || needsRecalc.some(r => r)} 
-              className={`py-2 px-8 text-xs font-bold flex items-center justify-center gap-2 rounded-lg transition-colors ${needsRecalc.some(r => r) ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'btn-primary'}`}
+            <button
+              onClick={handleSave}
+              disabled={saving || !isFormValid()}
+              className={`py-2 px-8 text-xs font-bold flex items-center justify-center gap-2 rounded-lg transition-colors ${(saving || !isFormValid()) ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed' : 'btn-primary'}`}
             >
-              {saving ? 'Processing...' : (needsRecalc.some(r => r) ? 'Recalculate Pending Tabs' : 'Issue Ticket & Save Account')}
+              {saving ? 'Processing...' : `Issue Ticket${forms.length > 1 ? ` (${forms.length} Passengers)` : ''} & Save`}
             </button>
           </div>
         </div>
@@ -1490,6 +1423,79 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           </div>
         </div>
       </Modal>
+
+      {/* Invoice Prompt Modal */}
+      <Modal isOpen={!!invoiceData} onClose={() => setInvoiceData(null)} title="Tickets Saved Successfully!">
+        <div className="p-6 text-center space-y-4">
+          <div className="mx-auto w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mb-4">
+            <CheckCircle className="text-success-600 w-10 h-10" />
+          </div>
+          <h3 className="text-lg font-bold text-neutral-800">Do you want to print the Client Invoice?</h3>
+          <p className="text-sm text-neutral-500">
+            This will generate a clean invoice for the client showing the total fare. Internal agency costs will be hidden.
+          </p>
+          <div className="flex gap-3 justify-center pt-4">
+            <button onClick={() => setInvoiceData(null)} className="btn-ghost px-6 py-2">
+              Skip
+            </button>
+            <button 
+              onClick={() => {
+                setTimeout(() => window.print(), 100);
+              }} 
+              className="btn-primary px-8 py-2 flex items-center gap-2"
+            >
+              Print Invoice
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Hidden Print View */}
+      {invoiceData && (
+        <div className="hidden print:block absolute top-0 left-0 w-full h-full bg-white z-[9999] p-8">
+          <div className="text-center mb-8 border-b-2 border-neutral-800 pb-4">
+            <h1 className="text-3xl font-black uppercase tracking-widest">TICKET INVOICE</h1>
+            <p className="text-neutral-500 mt-1">Thank you for traveling with us</p>
+          </div>
+          <div className="space-y-8">
+            {invoiceData.map((t, i) => (
+              <div key={i} className="border border-neutral-300 rounded-xl p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-neutral-800">{t.passenger_name}</h3>
+                    <p className="text-sm text-neutral-500">PNR: <span className="font-bold text-neutral-800">{t.pnr}</span> | Ticket No: {t.ticket_number}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-neutral-500">Flight Date</p>
+                    <p className="font-bold">{t.travel_date}</p>
+                  </div>
+                </div>
+                <div className="flex gap-4 items-center mb-6 py-4 border-y border-neutral-200">
+                  <div className="flex-1 text-center">
+                    <p className="text-2xl font-black">{t.origin}</p>
+                  </div>
+                  <div className="flex-1 flex justify-center text-neutral-400">
+                    <Plane size={24} />
+                  </div>
+                  <div className="flex-1 text-center">
+                    <p className="text-2xl font-black">{t.destination}</p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center bg-neutral-50 p-4 rounded-lg">
+                  <div>
+                    <p className="text-sm text-neutral-500">Airline</p>
+                    <p className="font-bold">{t.airline}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-neutral-500 uppercase tracking-wider">Total Amount</p>
+                    <p className="text-2xl font-black text-neutral-800">BDT {t.total_fare.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
     </div>
   );
 }
