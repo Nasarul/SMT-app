@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Plus, Search, Download, CreditCard as Edit2, CheckCircle, AlertCircle, MessageSquare, Trash2 } from 'lucide-react';
+import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
-import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { formatBDT, formatDate, getStatusColor, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
+import { formatBDT, formatDate, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -290,7 +289,7 @@ export function IndividualTicketPage() {
         status: f.status,
         supplier_id: f.supplier_id || null,
         ticket_type: 'individual',
-        sales_agent_id: profile?.id,
+        sales_agent_id: (profile as any)?.id || (profile as any)?.$id,
         metadata: JSON.stringify(combinedTaxes)
       };
     });
@@ -921,8 +920,8 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
       if (Array.isArray(parsedPassengers) && parsedPassengers.length > 0) {
         const newForms = parsedPassengers.map(p => ({
           ...emptyForm,
-          ticket_category: p.ticket_category === 'domestic' ? 'domestic' : 'international',
-          ticketing_source: 'gds', // Automatically sets to GDS if parsed from GDS text
+          ticket_category: (p.ticket_category === 'domestic' ? 'domestic' : 'international') as 'domestic' | 'international',
+          ticketing_source: 'gds' as 'gds' | 'non_gds', // Automatically sets to GDS if parsed from GDS text
           passenger_name: p.passenger_name || '',
           ticket_number: p.ticket_number || '',
           pnr: p.pnr || '',
@@ -1008,8 +1007,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
             setError(''); 
             setSuccess(''); 
             setForms([{ ...emptyForm }]);
-            setFareDatas([getFareData(emptyForm)]);
-            setNeedsRecalc([false]);
+            setActiveTab(0);
             setActiveTab(0);
           }} className="btn-primary flex items-center gap-2">
             <Plus size={16} /> Issue New Ticket

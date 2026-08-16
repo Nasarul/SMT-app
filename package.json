@@ -11,9 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
-    "appwrite": "^26.1.0",
+    "@supabase/supabase-js": "^2.112.3",
     "lucide-react": "^0.344.0",
-    "node-appwrite": "^26.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
