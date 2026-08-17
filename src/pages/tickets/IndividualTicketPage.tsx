@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2 } from 'lucide-react';
+import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2, Edit, Printer } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT, formatDate, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
@@ -51,7 +51,11 @@ const emptyForm = {
   origin: 'DAC',
   destination: '',
   travel_date: '',
+  departure_time: '',
   return_date: '',
+  return_departure_time: '',
+  return_arrival_time: '',
+  arrival_time: '',
   cabin_class: 'economy',
   base_fare: 0,
   total_fare_input: 0,
@@ -74,9 +78,7 @@ const emptyForm = {
   status: 'issued' as 'issued' | 'hold' | 'refunded' | 'voided',
   time_limit: '',
   supplier_id: '',
-  metadata: [
-    { key: 'Baggage', value: '30 KG' },
-  ] as { key: string; value: string }[]
+  metadata: [] as { key: string; value: string }[]
 };
 
 export function IndividualTicketPage() {
@@ -262,6 +264,8 @@ export function IndividualTicketPage() {
         issue_date: f.issue_date || '',
         time_limit: f.time_limit || '',
         flight_number: f.flight_number || '',
+        departure_time: f.departure_time || '',
+        arrival_time: f.arrival_time || '',
         discount: f.discount || 0,
         ait: fd.ait,
         iata_payment: fd.iata_payment,
@@ -294,18 +298,97 @@ export function IndividualTicketPage() {
       };
     });
 
-    const { error: err } = await supabase.from('air_tickets').insert(payloads);
-    if (err) {
-      setError(err.message);
+    const isUpdate = forms.length === 1 && (forms[0] as any).id;
+
+    if (isUpdate) {
+      const { error: err } = await supabase.from('air_tickets').update(payloads[0]).eq('id', (forms[0] as any).id);
+      if (err) {
+        setError(err.message);
+      } else {
+        setSuccess('Ticket updated successfully!');
+        setInvoiceData(payloads);
+        setShowForm(false);
+        setForms([{ ...emptyForm }]);
+        setActiveTab(0);
+        loadTickets();
+      }
     } else {
-      setSuccess(`${forms.length} Ticket(s) issued successfully!`);
-      setInvoiceData(payloads);
-      setShowForm(false);
-      setForms([{ ...emptyForm }]);
-      setActiveTab(0);
-      loadTickets();
+      const { error: err } = await supabase.from('air_tickets').insert(payloads);
+      if (err) {
+        setError(err.message);
+      } else {
+        setSuccess(`${forms.length} Ticket(s) issued successfully!`);
+        setInvoiceData(payloads);
+        setShowForm(false);
+        setForms([{ ...emptyForm }]);
+        setActiveTab(0);
+        loadTickets();
+      }
     }
     setSaving(false);
+  };
+
+  const handleEditTicket = (ticket: Ticket) => {
+    let parsedMetadata = [];
+    let customTaxes = [];
+    let timeLimit = '';
+    let discount = 0;
+    let ticketingSource = 'gds';
+    let ticketCategory = 'international';
+    let departureTime = '';
+    let arrivalTime = '';
+    let bd = 0, e5 = 0, ow = 0, p7 = 0, p8 = 0, ut = 0, e7 = 0, g8 = 0, ts = 0;
+
+    if (ticket.metadata) {
+      try {
+        const meta = JSON.parse(ticket.metadata);
+        parsedMetadata = meta.metadata || [];
+        customTaxes = meta.custom_taxes || [];
+        timeLimit = meta.time_limit || '';
+        discount = meta.discount || 0;
+        departureTime = meta.departure_time || '';
+        arrivalTime = meta.arrival_time || '';
+        ticketingSource = meta.ticketing_source || 'gds';
+        ticketCategory = meta.category || 'international';
+        bd = meta.bd || 0; e5 = meta.e5 || 0; ow = meta.ow || 0; p7 = meta.p7 || 0; p8 = meta.p8 || 0; ut = meta.ut || 0; e7 = meta.e7 || 0; g8 = meta.g8 || 0; ts = meta.ts || 0;
+      } catch (e) {}
+    }
+
+    setForms([{
+      ...emptyForm,
+      id: ticket.id,
+      ticket_number: ticket.ticket_number || '',
+      passenger_name: ticket.passenger_name || '',
+      passport_number: ticket.passport_number || '',
+      airline: ticket.airline || '',
+      pnr: ticket.pnr || '',
+      origin: ticket.origin || 'DAC',
+      destination: ticket.destination || '',
+      travel_date: ticket.travel_date || '',
+      cabin_class: ticket.cabin_class || 'economy',
+      base_fare: ticket.base_fare || 0,
+      total_fare_input: ticket.total_fare || 0,
+      service_charge: ticket.service_charge || 0,
+      status: ticket.status as any || 'issued',
+      supplier_id: ticket.supplier_id || '',
+      
+      metadata: parsedMetadata,
+      custom_taxes: customTaxes,
+      time_limit: timeLimit,
+      discount: discount,
+      departure_time: departureTime,
+      arrival_time: arrivalTime,
+      ticketing_source: ticketingSource as any,
+      ticket_category: ticketCategory as any,
+      bd, e5, ow, p7, p8, ut, e7, g8, ts
+    } as any]);
+    setActiveTab(0);
+    setShowForm(true);
+  };
+
+  const handlePrintTicket = (ticket: Ticket) => {
+    setInvoiceData([ticket]);
+    setTimeout(() => window.print(), 800);
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
@@ -654,6 +737,16 @@ export function IndividualTicketPage() {
         else if (code === '2A') newData.airline = 'Air Astra';
       }
     }
+    
+    // Fallback: If still no airline, just look for any known airline name in the text
+    if (!newData.airline) {
+      for (const al of airlineList) {
+        if (text.toUpperCase().includes(al.toUpperCase()) && al.length > 3) {
+          newData.airline = al;
+          break;
+        }
+      }
+    }
 
     // 5. ROUTE / ORIGIN & DESTINATION
     let routeCodeMatch = text.match(/\b([A-Z]{3})\s*(?:\([A-Z]{3}\))?\s*(?:-|TO|\/|\u2192|\u279C|➜|➔)\s*([A-Z]{3})\b/i);
@@ -722,6 +815,48 @@ export function IndividualTicketPage() {
           newData.travel_date = dateMatch[3] + '-' + dateMatch[2].padStart(2, '0') + '-' + dateMatch[1].padStart(2, '0');
         }
       }
+    }
+    
+    // 6.5 EXTRA DETAILS: FLIGHT NUMBER, TIMES, BAGGAGE, MOBILE
+    
+    // Flight Number
+    const flightNoMatch = text.match(/\b([A-Z0-9]{2})\s*(\d{3,4})\b/);
+    if (flightNoMatch) {
+      newData.flight_number = flightNoMatch[1].toUpperCase() + flightNoMatch[2];
+    }
+
+    // Times (HH:MM or HHMM)
+    const timeMatches = [...text.matchAll(/(?<!\d)(?:(?:[01]\d|2[0-3]):[0-5]\d|(?:[01]\d|2[0-3])[0-5]\d)(?!\d)/g)];
+    const formatTime = (t: string) => t.includes(':') ? t : t.substring(0,2) + ':' + t.substring(2);
+    
+    if (timeMatches.length >= 4) {
+      newData.departure_time = formatTime(timeMatches[0][0]);
+      newData.arrival_time = formatTime(timeMatches[1][0]);
+      newData.return_departure_time = formatTime(timeMatches[2][0]);
+      newData.return_arrival_time = formatTime(timeMatches[3][0]);
+    } else if (timeMatches.length >= 2) {
+      newData.departure_time = formatTime(timeMatches[0][0]);
+      newData.arrival_time = formatTime(timeMatches[1][0]);
+    } else if (timeMatches.length === 1) {
+      newData.departure_time = formatTime(timeMatches[0][0]);
+    }
+
+    // Baggage
+    const baggageMatch = text.match(/(?:BAGGAGE|BAG|ALLOW|ALLOWANCE)\s*[:#\-=\s]*\s*(\d{1,2}\s*(?:KG|KGS|PC|PCS|LBS))/i) || text.match(/\b(\d{1,2}K)\b/i) || text.match(/\b(\d{1,2}\s*KGS?)\b/i) || text.match(/\b(\d{1,2}\s*PCS?)\b/i);
+    if (baggageMatch) {
+       newData.metadata = [{ key: 'Baggage', value: baggageMatch[1].toUpperCase().replace('K', ' KG').replace(' KGGS', ' KGS').replace(' KGS', ' KG') }];
+    }
+
+    // Mobile Number
+    const mobileMatch = text.match(/(?:MOBILE|PHONE|CONTACT|TEL|CELL|PH)\s*[:#\-=\s]*\s*(\+?880\d{10}|01\d{9}|\d{10,14})\b/i) || text.match(/\b(\+?880\d{10}|01\d{9})\b/);
+    if (mobileMatch) {
+       newData.mobile = mobileMatch[1];
+    }
+
+    // Cabin Class
+    const classMatch = text.match(/\b(?:CLASS|CABIN|COMPARTMENT)\s*[:#\-=\s]*\s*(ECONOMY|BUSINESS|FIRST|PREMIUM ECONOMY)\b/i) || text.match(/\b(ECONOMY|BUSINESS|FIRST)\b/i);
+    if (classMatch) {
+       newData.cabin_class = classMatch[1].toLowerCase() as any;
     }
 
     // 7. TOTAL & BASE FARES (Prioritizes BDT Equivalent / Equiv Fare Paid)
@@ -837,11 +972,21 @@ REQUIRED JSON FIELD SPECIFICATIONS:
 5. "origin": 3-letter IATA origin airport code (e.g. "DAC", "CGP", "ZYL").
 6. "destination": 3-letter IATA destination airport code (e.g. "HKG", "ICN", "CXB", "CGP", "ZYL", "JED", "MED", "DXB", "KUL", "SIN", "BKK", "DOH").
 7. "travel_date": Flight travel/departure date formatted as YYYY-MM-DD (e.g. "2026-08-28" for "28AUG"). Combine day-month with ticket issue year (e.g. 2026).
-8. "base_fare": Base airfare amount in BDT as a number. Prioritize "EQUIV FARE PAID" or "EQUIV FARE" in BDT over USD airfare.
-9. "total_fare": Total ticket price in BDT as a number (e.g. "62137").
-10. "ut_tax", "bd_tax", "e5_tax", "ow_tax", "p7_tax", "p8_tax", "e7_tax", "g8_tax", "ts_tax": Specific tax breakdown numbers if mentioned (e.g. "500BD" -> bd_tax: 500, "446E5" -> e5_tax: 446, "2500OW" -> ow_tax: 2500, "1234P7" -> p7_tax: 1234, "1234P8" -> p8_tax: 1234, "6000UT" -> ut_tax: 6000).
-11. "ticket_category": "domestic" or "international".
-12. "extra_info": Array of key-value objects for baggage, class, meal, or custom tax codes like G3 (1101) and I5 (1023).
+8. "flight_number": The flight number (e.g. "BG395" or "CX123").
+9. "departure_time": The departure time in HH:MM format (24-hour).
+10. "arrival_time": The arrival time in HH:MM format (24-hour).
+11. "return_date": Return flight travel date formatted as YYYY-MM-DD if present.
+12. "return_departure_time": Return flight departure time in HH:MM format.
+13. "return_arrival_time": Return flight arrival time in HH:MM format.
+14. "base_fare": Base airfare amount in BDT as a number. Prioritize "EQUIV FARE PAID" or "EQUIV FARE" in BDT over USD airfare.
+15. "total_fare": Total ticket price in BDT as a number (e.g. "62137").
+16. "ut_tax", "bd_tax", "e5_tax", "ow_tax", "p7_tax", "p8_tax", "e7_tax", "g8_tax", "ts_tax": Specific tax breakdown numbers if mentioned.
+17. "ticket_category": "domestic" or "international".
+18. "extra_info": Array of key-value objects for baggage (e.g. {key:"Baggage", value:"20 KG"}), class, meal, or custom tax codes like G3 (1101) and I5 (1023).
+19. "mobile": Passenger mobile number if found (e.g. "01700000000").
+20. "cabin_class": Flight cabin class. Must be one of: "economy", "business", "first".
+
+IMPORTANT: If any field is not found in the text, return an empty string "" or empty array [] for that key. Do NOT omit any keys from the output.
 
 Text to parse:
 """
@@ -923,12 +1068,20 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           ticket_category: (p.ticket_category === 'domestic' ? 'domestic' : 'international') as 'domestic' | 'international',
           ticketing_source: 'gds' as 'gds' | 'non_gds', // Automatically sets to GDS if parsed from GDS text
           passenger_name: p.passenger_name || '',
+          mobile: p.mobile || '',
+          cabin_class: (['economy', 'business', 'first'].includes(p.cabin_class?.toLowerCase()) ? p.cabin_class.toLowerCase() : 'economy') as any,
           ticket_number: p.ticket_number || '',
           pnr: p.pnr || '',
           airline: p.airline || '',
+          flight_number: p.flight_number || '',
           origin: p.origin || 'DAC',
           destination: p.destination || 'CXB',
           travel_date: p.travel_date || '',
+          departure_time: p.departure_time || '',
+          arrival_time: p.arrival_time || '',
+          return_date: p.return_date || '',
+          return_departure_time: p.return_departure_time || '',
+          return_arrival_time: p.return_arrival_time || '',
           base_fare: Number(p.base_fare) || 0,
           total_fare_input: Number(p.total_fare) || 0,
           ut: Number(p.ut_tax) || 0,
@@ -992,8 +1145,8 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
   }, [showForm, showImportModal, forms, activeTab, saving]);
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
+    <div className="p-4 lg:p-6 animate-fade-in print:p-0 print:m-0">
+      <div className="page-header print:hidden">
         <div>
           <h2 className="page-title">Individual Air Tickets</h2>
           <p className="text-sm text-neutral-500">Retail ticket sales management</p>
@@ -1022,7 +1175,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
       )}
 
       {/* Filters */}
-      <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3">
+      <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3 print:hidden">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
@@ -1045,7 +1198,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden print:hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -1129,16 +1282,36 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                     )}
                   </td>
                   <td className="table-cell text-right">
-                    <button 
-                      onClick={() => {
-                        const text = `✈️ *Flight Details - ${ticket.airline}*\n\n👤 Passenger: ${ticket.passenger_name}\n🎫 Ticket #: ${ticket.ticket_number}\n🔢 PNR: ${ticket.pnr}\n📍 Route: ${ticket.origin} -> ${ticket.destination}\n📅 Date: ${formatDate(ticket.travel_date)}\n\n_Thank you for choosing Sonar Madina Travels!_`;
-                        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                      }}
-                      className="p-1.5 hover:bg-success-50 text-success-600 rounded-lg transition-colors"
-                      title="Share on WhatsApp"
-                    >
-                      <MessageSquare size={16} />
-                    </button>
+                    <div className="flex justify-end items-center gap-1">
+                      {profile && ['admin', 'super_admin', 'tour_manager', 'sales_agent'].includes((profile as any).role?.toLowerCase().replace(/ /g, '_')) && (
+                        <>
+                          <button 
+                            onClick={() => handlePrintTicket(ticket)}
+                            className="p-1.5 hover:bg-neutral-100 text-neutral-600 rounded-lg transition-colors"
+                            title="Print Ticket"
+                          >
+                            <Printer size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleEditTicket(ticket)}
+                            className="p-1.5 hover:bg-primary-50 text-primary-600 rounded-lg transition-colors"
+                            title="Edit Ticket"
+                          >
+                            <Edit size={16} />
+                          </button>
+                        </>
+                      )}
+                      <button 
+                        onClick={() => {
+                          const text = `✈️ *Flight Details - ${ticket.airline}*\n\n👤 Passenger: ${ticket.passenger_name}\n🎫 Ticket #: ${ticket.ticket_number}\n🔢 PNR: ${ticket.pnr}\n📍 Route: ${ticket.origin} -> ${ticket.destination}\n📅 Date: ${formatDate(ticket.travel_date)}\n\n_Thank you for choosing Sonar Madina Travels!_`;
+                          window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                        }}
+                        className="p-1.5 hover:bg-success-50 text-success-600 rounded-lg transition-colors"
+                        title="Share on WhatsApp"
+                      >
+                        <MessageSquare size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1319,9 +1492,29 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                 <input type="date" className={`input-field py-1.5 px-2.5 text-xs ${!form.travel_date?.trim() ? 'border-error-400 focus:border-error-500' : ''}`} value={form.travel_date} onChange={e => updateActiveForm('travel_date', e.target.value)} />
               </div>
               <div className="col-span-6 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Dep. Time</label>
+                <input type="time" className="input-field py-1.5 px-2.5 text-xs" value={form.departure_time || ''} onChange={e => updateActiveForm('departure_time', e.target.value)} />
+              </div>
+              <div className="col-span-6 sm:col-span-3">
+                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Arrival Time</label>
+                <input type="time" className="input-field py-1.5 px-2.5 text-xs" value={form.arrival_time || ''} onChange={e => updateActiveForm('arrival_time', e.target.value)} />
+              </div>
+              <div className="col-span-6 sm:col-span-3">
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Return Date</label>
                 <input type="date" className="input-field py-1.5 px-2.5 text-xs" value={form.return_date} onChange={e => updateActiveForm('return_date', e.target.value)} />
               </div>
+              {form.return_date && (
+                <>
+                  <div className="col-span-6 sm:col-span-3">
+                    <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ret. Dep. Time</label>
+                    <input type="time" className="input-field py-1.5 px-2.5 text-xs" value={form.return_departure_time || ''} onChange={e => updateActiveForm('return_departure_time', e.target.value)} />
+                  </div>
+                  <div className="col-span-6 sm:col-span-3">
+                    <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Ret. Arrival Time</label>
+                    <input type="time" className="input-field py-1.5 px-2.5 text-xs" value={form.return_arrival_time || ''} onChange={e => updateActiveForm('return_arrival_time', e.target.value)} />
+                  </div>
+                </>
+              )}
               <div className="col-span-12 sm:col-span-6">
                 <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Supplier / Vendor</label>
                 <select className="input-field py-1.5 px-2.5 text-xs font-medium" value={form.supplier_id} onChange={e => updateActiveForm('supplier_id', e.target.value)}>
@@ -1577,76 +1770,202 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
         </div>
       </Modal>
 
-      {/* Invoice Prompt Modal */}
-      <Modal isOpen={!!invoiceData} onClose={() => setInvoiceData(null)} title="Tickets Saved Successfully!">
-        <div className="p-6 text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mb-4">
-            <CheckCircle className="text-success-600 w-10 h-10" />
-          </div>
-          <h3 className="text-lg font-bold text-neutral-800">Do you want to print the Client Invoice?</h3>
-          <p className="text-sm text-neutral-500">
-            This will generate a clean invoice for the client showing the total fare. Internal agency costs will be hidden.
-          </p>
-          <div className="flex gap-3 justify-center pt-4">
-            <button onClick={() => setInvoiceData(null)} className="btn-ghost px-6 py-2">
-              Skip
-            </button>
-            <button 
-              onClick={() => {
-                setTimeout(() => window.print(), 100);
-              }} 
-              className="btn-primary px-8 py-2 flex items-center gap-2"
-            >
-              Print Invoice
-            </button>
-          </div>
-        </div>
-      </Modal>
-
       {/* Hidden Print View */}
       {invoiceData && (
-        <div className="hidden print:block absolute top-0 left-0 w-full h-full bg-white z-[9999] p-8">
-          <div className="text-center mb-8 border-b-2 border-neutral-800 pb-4">
-            <h1 className="text-3xl font-black uppercase tracking-widest">TICKET INVOICE</h1>
-            <p className="text-neutral-500 mt-1">Thank you for traveling with us</p>
-          </div>
-          <div className="space-y-8">
-            {invoiceData.map((t, i) => (
-              <div key={i} className="border border-neutral-300 rounded-xl p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-neutral-800">{t.passenger_name}</h3>
-                    <p className="text-sm text-neutral-500">PNR: <span className="font-bold text-neutral-800">{t.pnr}</span> | Ticket No: {t.ticket_number}</p>
+        <div className="hidden print:block w-full bg-white text-black font-sans pb-4">
+          {invoiceData.map((t, i) => {
+             const meta = t.metadata ? (typeof t.metadata === 'string' ? JSON.parse(t.metadata) : t.metadata) : {};
+             const p_meta = meta.metadata || [];
+             
+             return (
+              <div key={i} className="px-6 py-4 mx-auto w-full" style={{ pageBreakAfter: 'always' }}>
+                
+                {/* Header Section */}
+                <div className="flex justify-between items-start border-b-2 border-neutral-800 pb-4 mb-4">
+                  <div className="flex items-center gap-4">
+                    <img src="/logo.png" alt="Sonar Madina Travels" className="h-12 w-auto object-contain" />
+                    <div className="border-l border-neutral-300 pl-4">
+                      <h2 className="text-lg font-black text-neutral-900 tracking-tight uppercase">Sonar Madina Travels</h2>
+                      <p className="text-[10px] text-neutral-600 leading-tight mt-1">
+                        Elite House, Suite 7A (7th Floor), 54, Motijheel C/A, Dhaka-1000<br />
+                        Mobile: <strong>01932555000</strong> | Mail: sonarmadinatravels@gmail.com
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-neutral-500">Flight Date</p>
-                    <p className="font-bold">{t.travel_date}</p>
-                  </div>
-                </div>
-                <div className="flex gap-4 items-center mb-6 py-4 border-y border-neutral-200">
-                  <div className="flex-1 text-center">
-                    <p className="text-2xl font-black">{t.origin}</p>
-                  </div>
-                  <div className="flex-1 flex justify-center text-neutral-400">
-                    <Plane size={24} />
-                  </div>
-                  <div className="flex-1 text-center">
-                    <p className="text-2xl font-black">{t.destination}</p>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center bg-neutral-50 p-4 rounded-lg">
-                  <div>
-                    <p className="text-sm text-neutral-500">Airline</p>
-                    <p className="font-bold">{t.airline}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-neutral-500 uppercase tracking-wider">Total Amount</p>
-                    <p className="text-2xl font-black text-neutral-800">BDT {t.total_fare.toLocaleString()}</p>
+                  <div className="flex items-center gap-4 text-right">
+                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`PNR: ${t.pnr} | Passenger: ${t.passenger_name} | Ticket: ${t.ticket_number || 'TBA'}`)}`} alt="QR Code" className="w-14 h-14" />
+                    <div>
+                      <h1 className="text-2xl font-black text-neutral-900 uppercase tracking-widest">E-Ticket</h1>
+                      <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Booking Confirmation</p>
+                    </div>
                   </div>
                 </div>
+
+                {/* Passenger Info */}
+                <div className="border border-neutral-300 p-3 mb-4 text-xs">
+                  <table className="w-full text-left">
+                    <tbody>
+                      <tr>
+                        <td className="w-1/4 pb-2"><span className="text-neutral-500 font-semibold uppercase text-[9px]">Passenger Name</span></td>
+                        <td className="w-1/4 pb-2 font-bold uppercase">{t.passenger_name}</td>
+                        <td className="w-1/4 pb-2 pl-4"><span className="text-neutral-500 font-semibold uppercase text-[9px]">Booking Ref (PNR)</span></td>
+                        <td className="w-1/4 pb-2 font-bold uppercase">{t.pnr}</td>
+                      </tr>
+                      <tr>
+                        <td className="w-1/4"><span className="text-neutral-500 font-semibold uppercase text-[9px]">Ticket Number</span></td>
+                        <td className="w-1/4 font-bold">{t.ticket_number || 'TBA'}</td>
+                        <td className="w-1/4 pl-4"><span className="text-neutral-500 font-semibold uppercase text-[9px]">Issue Date</span></td>
+                        <td className="w-1/4 font-bold">{meta.issue_date ? formatDate(meta.issue_date) : formatDate(new Date().toISOString())}</td>
+                      </tr>
+                      {meta.passport_number && (
+                        <tr>
+                          <td className="w-1/4 pt-2"><span className="text-neutral-500 font-semibold uppercase text-[9px]">Passport Number</span></td>
+                          <td className="w-1/4 pt-2 font-bold uppercase">{meta.passport_number}</td>
+                          <td className="w-1/4 pt-2 pl-4"></td>
+                          <td className="w-1/4 pt-2"></td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Itinerary */}
+                <div className="mb-4">
+                  <h3 className="text-[10px] font-bold text-neutral-800 uppercase tracking-widest mb-2 border-b border-neutral-300 pb-1">Flight Itinerary</h3>
+                  <table className="w-full text-left text-xs border border-neutral-300">
+                    <thead className="bg-neutral-100 text-neutral-700">
+                      <tr>
+                        <th className="px-3 py-2 border-b border-neutral-300 font-bold">Date</th>
+                        <th className="px-3 py-2 border-b border-neutral-300 font-bold">Airline & Flight</th>
+                        <th className="px-3 py-2 border-b border-neutral-300 font-bold">Departing</th>
+                        <th className="px-3 py-2 border-b border-neutral-300 font-bold">Arriving</th>
+                        <th className="px-3 py-2 border-b border-neutral-300 font-bold">Class</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200">
+                      <tr>
+                        <td className="px-3 py-2 font-semibold whitespace-nowrap">{formatDate(t.travel_date)}</td>
+                        <td className="px-3 py-2">
+                          <span className="font-bold">{t.airline}</span>
+                          <span className="text-[9px] ml-2 text-neutral-500">{meta.flight_number || ''}</span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-bold">{t.origin}</div>
+                          {meta.departure_time && <div className="text-[10px] text-neutral-600 font-semibold">{meta.departure_time}</div>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-bold">{t.destination}</div>
+                          {meta.arrival_time && <div className="text-[10px] text-neutral-600 font-semibold">{meta.arrival_time}</div>}
+                        </td>
+                        <td className="px-3 py-2 font-semibold capitalize">{t.cabin_class || 'Economy'}</td>
+                      </tr>
+                      {t.return_date && (
+                        <tr>
+                          <td className="px-3 py-2 font-semibold whitespace-nowrap">{formatDate(t.return_date)}</td>
+                          <td className="px-3 py-2">
+                            <span className="font-bold">{t.airline}</span>
+                            <span className="text-[9px] ml-2 text-neutral-500">Return</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="font-bold">{t.destination}</div>
+                            {meta.return_departure_time && <div className="text-[10px] text-neutral-600 font-semibold">{meta.return_departure_time}</div>}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="font-bold">{t.origin}</div>
+                            {meta.return_arrival_time && <div className="text-[10px] text-neutral-600 font-semibold">{meta.return_arrival_time}</div>}
+                          </td>
+                          <td className="px-3 py-2 font-semibold capitalize">{t.cabin_class || 'Economy'}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Additional Info Grid */}
+                <div className="flex gap-4 mb-4">
+                  {/* Baggage & Extras */}
+                  <div className="flex-1 border border-neutral-300 p-3 text-[10px]">
+                    <h3 className="font-bold text-neutral-800 uppercase mb-2 border-b border-neutral-200 pb-1">Baggage & Services</h3>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-neutral-600 font-semibold">Booking Status:</span>
+                        <span className="font-bold text-neutral-900 uppercase">Confirmed</span>
+                      </div>
+                      {p_meta && p_meta.length > 0 ? p_meta.map((m: any, idx: number) => (
+                        <div key={idx} className="flex justify-between">
+                          <span className="text-neutral-600 font-semibold">{m.key}:</span>
+                          <span className="font-bold">{m.value}</span>
+                        </div>
+                      )) : (
+                         <div className="flex justify-between">
+                          <span className="text-neutral-600 font-semibold">Baggage:</span>
+                          <span className="font-bold">As per airline policy</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Payment Summary */}
+                  <div className="flex-1 border border-neutral-300 p-3 text-[10px]">
+                    <h3 className="font-bold text-neutral-800 uppercase mb-2 border-b border-neutral-200 pb-1">Payment Receipt</h3>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-600 font-semibold">Base Fare:</span>
+                        <span className="font-bold">BDT {t.base_fare?.toLocaleString() || 0}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-600 font-semibold">Taxes & Surcharges:</span>
+                        <span className="font-bold">BDT {((t.tax_amount || 0) + (t.ait_amount || 0)).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-600 font-semibold">Service Charge:</span>
+                        <span className="font-bold">BDT {t.service_charge?.toLocaleString() || 0}</span>
+                      </div>
+                      {(() => {
+                        const subtotal = (t.base_fare || 0) + (t.tax_amount || 0) + (t.ait_amount || 0) + (t.service_charge || 0);
+                        const discount = meta.discount ? Number(meta.discount) : (subtotal > t.total_fare ? subtotal - t.total_fare : 0);
+                        if (discount > 0) {
+                          return (
+                            <div className="flex justify-between items-center text-error-600">
+                              <span className="font-semibold">Discount:</span>
+                              <span className="font-bold">- BDT {discount.toLocaleString()}</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                      <div className="flex justify-between items-center border-t border-neutral-200 pt-1 mt-1">
+                        <span className="text-neutral-800 font-bold uppercase">Total Amount:</span>
+                        <span className="text-xs font-bold text-neutral-900">BDT {t.total_fare?.toLocaleString() || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Terms and Conditions */}
+                <div className="mt-4 pt-4 border-t border-neutral-300">
+                  <h4 className="text-[10px] font-bold text-neutral-800 uppercase mb-2">Terms & Conditions</h4>
+                  <ul className="list-disc pl-4 space-y-1 text-[9px] text-neutral-600 leading-tight">
+                    <li><strong>Check-in:</strong> Passengers must report at the airport check-in counter at least 3 hours prior to the scheduled departure time. Counters close 60 minutes before departure.</li>
+                    <li><strong>Travel Documents:</strong> A valid passport (at least 6 months validity) and required visas are the sole responsibility of the passenger.</li>
+                    <li><strong>Cancellation & Refund:</strong> Tickets are subject to airline cancellation, date change, and no-show policies. Agency service charges may apply for any modifications.</li>
+                    <li><strong>Flight Schedules:</strong> Airlines reserve the right to reschedule or cancel flights without prior notice. Verify your flight status 24 hours prior to departure.</li>
+                  </ul>
+                  
+                  <div className="mt-6 flex justify-between items-end text-[9px] text-neutral-500 font-semibold">
+                    <div className="text-left">
+                      <p>This is a computer-generated document and does not require a signature.</p>
+                      <p className="mt-1">
+                        <span className="font-bold text-neutral-600">Issued By:</span> {profile?.full_name || 'Admin'} &nbsp;|&nbsp; 
+                        <span className="font-bold text-neutral-600"> Print Date:</span> {formatDate(new Date().toISOString())}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       )}
     </div>
