@@ -29,7 +29,8 @@ export function ReceivablesPage() {
     setLoading(true);
     try {
       const { data: agents } = await supabase.from('b2b_agents').select('id, agency_name, mobile, current_balance');
-      const { data: tickets } = await supabase.from('air_tickets').select('total_fare, customer_id');
+      const { data: tickets } = await supabase.from('air_tickets').select('total_fare, paid_amount, customer_id');
+      const { data: visas } = await supabase.from('visas').select('total_amount, paid_amount, customer_id');
       const { data: tourBookings } = await supabase.from('tour_bookings').select('total_amount, paid_amount, customer_id');
       const { data: umrahPilgrims } = await supabase.from('umrah_pilgrims').select('package_price, total_paid, customer_id');
       const { data: customers } = await supabase.from('customers').select('id, full_name, mobile');
@@ -64,6 +65,16 @@ export function ReceivablesPage() {
         umrahPilgrims?.filter(p => p.customer_id === cust.id).forEach(p => {
           total += Number(p.package_price);
           paid += Number(p.total_paid);
+        });
+
+        tickets?.filter(t => t.customer_id === cust.id).forEach(t => {
+          total += Number(t.total_fare);
+          paid += Number(t.paid_amount || 0);
+        });
+
+        visas?.filter(v => v.customer_id === cust.id).forEach(v => {
+          total += Number(v.total_amount);
+          paid += Number(v.paid_amount || 0);
         });
 
         const balance = total - paid;

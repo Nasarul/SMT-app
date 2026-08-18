@@ -109,6 +109,9 @@ const emptyForm = {
   status: 'issued' as 'issued' | 'hold' | 'refunded' | 'voided',
   time_limit: '',
   supplier_id: '',
+  customer_id: '',
+  paid_amount: 0,
+  payment_status: 'paid' as 'paid' | 'partial' | 'due',
   metadata: [] as { key: string; value: string }[]
 };
 
@@ -251,12 +254,12 @@ export function IndividualTicketPage() {
   const handleClientAutofill = async (field: 'mobile' | 'passport_number', val: string) => {
     if (!val || val.length < 5) return;
     try {
-      const { data } = await supabase.from('customers').select('full_name').eq(field, val).single();
+      const { data } = await supabase.from('customers').select('id, full_name').eq(field, val).single();
       if (data && data.full_name) {
         setForms(prev => {
           const next = [...prev];
           if (!next[activeTab].passenger_name) {
-             next[activeTab] = { ...next[activeTab], passenger_name: data.full_name };
+             next[activeTab] = { ...next[activeTab], passenger_name: data.full_name, customer_id: data.id };
           }
           return next;
         });
@@ -323,6 +326,9 @@ export function IndividualTicketPage() {
         profit: fd.net_profit,
         status: f.status,
         supplier_id: f.supplier_id || null,
+        customer_id: f.customer_id || null,
+        paid_amount: f.payment_status === 'paid' ? fd.total_client_fare : (f.payment_status === 'due' ? 0 : (Number(f.paid_amount) || 0)),
+        payment_status: f.payment_status || 'paid',
         ticket_type: 'individual',
         sales_agent_id: (profile as any)?.id || (profile as any)?.$id,
         metadata: JSON.stringify(combinedTaxes)
@@ -1814,15 +1820,27 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
               </button>
             </div>
 
-            {/* Service Charge & Discount */}
-            <div className="grid grid-cols-2 gap-2.5">
+            {/* Additional Charges & Payment */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div>
-                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Service Charge (BDT)</label>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Service Charge</label>
                 <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-success-700" value={form.service_charge} onChange={e => updateActiveForm('service_charge', e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Discount (BDT)</label>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Discount</label>
                 <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-semibold text-orange-600" value={form.discount || 0} onChange={e => updateActiveForm('discount', e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Payment Status</label>
+                <select className="input-field py-1.5 px-2.5 text-xs font-semibold" value={form.payment_status} onChange={e => updateActiveForm('payment_status', e.target.value as 'paid' | 'partial' | 'due')}>
+                  <option value="paid">Paid Full</option>
+                  <option value="partial">Partial Pay</option>
+                  <option value="due">Due / Credit</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-neutral-600 mb-1 block uppercase">Paid Amount (BDT)</label>
+                <input type="number" min="0" className="input-field py-1.5 px-2.5 text-xs font-bold text-success-700" value={form.paid_amount} onChange={e => updateActiveForm('paid_amount', e.target.value)} disabled={form.payment_status === 'due' || form.payment_status === 'paid'} placeholder={form.payment_status === 'due' ? '0' : (form.payment_status === 'paid' ? 'Auto-Full' : 'Amount...')} />
               </div>
             </div>
 

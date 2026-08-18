@@ -35,6 +35,9 @@ const emptyForm = {
   service_charge: 500,
   cost_amount: 0,
   mobile: '',
+  customer_id: '',
+  payment_status: 'paid' as 'paid' | 'partial' | 'due',
+  paid_amount: 0,
 };
 
 export function VisaPage() {
@@ -62,6 +65,24 @@ export function VisaPage() {
     setLoading(false);
   };
 
+  const handleClientAutofill = async (field: 'mobile' | 'passport_number', val: string) => {
+    if (!val || val.length < 5) return;
+    try {
+      const { data } = await supabase.from('customers').select('id, full_name').eq(field, val).single();
+      if (data && data.full_name) {
+        setForm(prev => ({
+          ...prev,
+          passenger_name: prev.passenger_name || data.full_name,
+          customer_id: data.id
+        }));
+        setSuccess('Customer found! Name auto-filled.');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const handleSave = async () => {
     if (!form.passenger_name || !form.country || !form.visa_type) {
       setError('Please fill required fields.');
@@ -82,6 +103,8 @@ export function VisaPage() {
       ...cleanedData,
       total_amount: total,
       profit,
+      paid_amount: form.payment_status === 'paid' ? total : (form.payment_status === 'due' ? 0 : (Number(form.paid_amount) || 0)),
+      payment_status: form.payment_status,
       created_by: profile?.id
     }]);
 
@@ -246,11 +269,11 @@ export function VisaPage() {
             </div>
             <div>
               <label className="label">Passport Number *</label>
-              <input className="input-field" value={form.passport_number} onChange={e => f('passport_number', e.target.value)} />
+              <input className="input-field" value={form.passport_number} onChange={e => f('passport_number', e.target.value)} onBlur={e => handleClientAutofill('passport_number', e.target.value)} />
             </div>
             <div>
               <label className="label">Mobile Number (for WhatsApp)</label>
-              <input className="input-field" value={form.mobile} onChange={e => f('mobile', e.target.value)} placeholder="017xxxxxxxx" />
+              <input className="input-field" value={form.mobile} onChange={e => f('mobile', e.target.value)} onBlur={e => handleClientAutofill('mobile', e.target.value)} placeholder="017xxxxxxxx" />
             </div>
             <div>
               <label className="label">Country *</label>
@@ -308,6 +331,22 @@ export function VisaPage() {
                 <div className="input-field bg-neutral-50 font-bold text-success-600">
                   {formatBDT((Number(form.visa_fee) + Number(form.service_charge)) - Number(form.cost_amount))}
                 </div>
+              </div>
+            </div>
+            
+            <h3 className="text-sm font-semibold text-neutral-600 mb-3 mt-4 uppercase tracking-wide">Payment Status</h3>
+            <div className="form-grid">
+              <div>
+                <label className="label">Payment Status</label>
+                <select className="input-field" value={form.payment_status} onChange={e => f('payment_status', e.target.value)}>
+                  <option value="paid">Paid Full</option>
+                  <option value="partial">Partial Pay</option>
+                  <option value="due">Due / Credit</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Paid Amount (BDT)</label>
+                <input type="number" min="0" className="input-field" value={form.paid_amount} onChange={e => f('paid_amount', e.target.value)} disabled={form.payment_status === 'due' || form.payment_status === 'paid'} placeholder={form.payment_status === 'due' ? '0' : (form.payment_status === 'paid' ? 'Auto-Full' : 'Amount...')} />
               </div>
             </div>
           </div>
