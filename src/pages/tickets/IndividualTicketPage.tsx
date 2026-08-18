@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2, Edit, Printer } from 'lucide-react';
+import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2, Edit, Printer, Upload } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT, formatDate, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
@@ -35,6 +35,37 @@ interface Supplier {
   id: string;
   company_name: string;
 }
+
+const inferAirlineFromFlightNumber = (flightNumber: string) => {
+  if (!flightNumber) return '';
+  const match = flightNumber.match(/^([a-zA-Z0-9]{2})/);
+  if (!match) return '';
+  const code = match[1].toUpperCase();
+  if (code === 'CX') return 'Cathay Pacific';
+  if (code === 'BG') return 'Biman Bangladesh Airlines';
+  if (code === 'BS') return 'US-Bangla Airlines';
+  if (code === 'G9') return 'Air Arabia';
+  if (code === 'FZ') return 'flydubai';
+  if (code === 'EK') return 'Emirates';
+  if (code === 'SV') return 'Saudi Airlines (Saudia)';
+  if (code === 'QR') return 'Qatar Airways';
+  if (code === 'SQ') return 'Singapore Airlines';
+  if (code === 'MH') return 'Malaysia Airlines';
+  if (code === 'TG') return 'Thai Airways';
+  if (code === '6E') return 'IndiGo';
+  if (code === 'VQ') return 'Novoair';
+  if (code === '2A') return 'Air Astra';
+  if (code === 'KU') return 'Kuwait Airways';
+  if (code === 'J9') return 'Jazeera Airways';
+  if (code === 'OV') return 'SalamAir';
+  if (code === 'GF') return 'Gulf Air';
+  if (code === 'WY') return 'Oman Air';
+  if (code === 'IX') return 'Air India Express';
+  if (code === 'AI') return 'Air India';
+  if (code === 'UK') return 'Vistara';
+  if (code === 'AK') return 'AirAsia';
+  return '';
+};
 
 const emptyForm = {
   ticketing_source: 'gds' as 'gds' | 'non_gds',
@@ -444,6 +475,14 @@ export function IndividualTicketPage() {
     setForms(prev => {
       const next = [...prev];
       next[activeTab] = { ...next[activeTab], [field]: val };
+      
+      if (field === 'flight_number') {
+        const detectedAirline = inferAirlineFromFlightNumber(val);
+        if (detectedAirline && !next[activeTab].airline) {
+          next[activeTab].airline = detectedAirline;
+        }
+      }
+      
       return next;
     });
   };
@@ -569,6 +608,33 @@ export function IndividualTicketPage() {
     if (forms.length <= 1) return;
     setForms(prev => prev.filter((_, i) => i !== indexToRemove));
     setActiveTab(prev => (prev >= indexToRemove ? Math.max(0, prev - 1) : prev));
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setImportError('');
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      setIsExtractingPdf(true);
+      try {
+        const text = await extractTextFromPdf(file);
+        setGdsText(text);
+        setSuccess('PDF text extracted successfully! You can now parse it.');
+        setTimeout(() => setSuccess(''), 3000);
+      } catch (err: any) {
+        setImportError(err.message || 'Failed to extract text from PDF.');
+      } finally {
+        setIsExtractingPdf(false);
+      }
+    } else if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setGdsText(ev.target?.result as string);
+      reader.readAsText(file);
+    } else {
+      setImportError('Please select a valid PDF or text file.');
+    }
+    e.target.value = '';
   };
 
   const handleDrop = async (e: React.DragEvent) => {
@@ -791,21 +857,7 @@ export function IndividualTicketPage() {
     } else {
       const flightMatch = text.match(/\b([A-Z0-9]{2})\s*\d{3,4}\b/);
       if (flightMatch) {
-        const code = flightMatch[1].toUpperCase();
-        if (code === 'CX') newData.airline = 'Cathay Pacific';
-        else if (code === 'BG') newData.airline = 'Biman Bangladesh Airlines';
-        else if (code === 'BS') newData.airline = 'US-Bangla Airlines';
-        else if (code === 'G9') newData.airline = 'Air Arabia';
-        else if (code === 'FZ') newData.airline = 'flydubai';
-        else if (code === 'EK') newData.airline = 'Emirates';
-        else if (code === 'SV') newData.airline = 'Saudi Airlines (Saudia)';
-        else if (code === 'QR') newData.airline = 'Qatar Airways';
-        else if (code === 'SQ') newData.airline = 'Singapore Airlines';
-        else if (code === 'MH') newData.airline = 'Malaysia Airlines';
-        else if (code === 'TG') newData.airline = 'Thai Airways';
-        else if (code === '6E') newData.airline = 'IndiGo';
-        else if (code === 'VQ') newData.airline = 'Novoair';
-        else if (code === '2A') newData.airline = 'Air Astra';
+        newData.airline = inferAirlineFromFlightNumber(flightMatch[0]);
       }
     }
     
@@ -823,6 +875,21 @@ export function IndividualTicketPage() {
     let routeCodeMatch = text.match(/\b([A-Z]{3})\s*(?:\([A-Z]{3}\))?\s*(?:-|TO|\/|\u2192|\u279C|➜|➔)\s*([A-Z]{3})\b/i);
     if (!routeCodeMatch) {
        routeCodeMatch = text.match(/\(([A-Z]{3})\)\s*[A-Za-z]+\s*\(([A-Z]{3})\)/i);
+    }
+    
+    if (!routeCodeMatch) {
+      // Fallback: look for two adjacent valid IATA airport codes
+      const tokens = text.match(/\b[A-Z]{3}\b/gi);
+      if (tokens) {
+        for (let i = 0; i < tokens.length - 1; i++) {
+          const code1 = tokens[i].toUpperCase();
+          const code2 = tokens[i+1].toUpperCase();
+          if (code1 !== code2 && IATA_AIRPORTS.some(a => a.code === code1) && IATA_AIRPORTS.some(a => a.code === code2)) {
+            routeCodeMatch = [ '', code1, code2 ] as any;
+            break;
+          }
+        }
+      }
     }
     
     if (routeCodeMatch) {
@@ -1857,11 +1924,27 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           >
             <label className="label absolute -top-3 left-3 bg-white px-1 text-primary-700">Paste or Drop GDS Report PDF/Text *</label>
             <textarea 
-              className="input-field min-h-[200px] font-mono text-xs leading-normal bg-transparent border-0 ring-0 focus:ring-0 resize-none p-4 w-full" 
+              className="input-field min-h-[200px] font-mono text-xs leading-normal bg-transparent border-0 ring-0 focus:ring-0 resize-none p-4 pb-12 w-full" 
               placeholder="NAME: RAHMAN/SAYEDUR... TICKET: 779... OR drag and drop a PDF file here"
               value={gdsText}
               onChange={e => { setGdsText(e.target.value); setImportError(''); }}
             />
+            <div className="absolute bottom-3 right-3 z-10">
+               <input 
+                 type="file" 
+                 accept="application/pdf,text/plain" 
+                 className="hidden" 
+                 id="gds-file-upload" 
+                 onChange={handleFileUpload} 
+               />
+               <label 
+                 htmlFor="gds-file-upload" 
+                 className="cursor-pointer bg-primary-100 hover:bg-primary-200 text-primary-700 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
+               >
+                 <Upload size={14} />
+                 Browse File
+               </label>
+            </div>
             {isExtractingPdf && (
               <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center rounded-xl z-10">
                 <div className="text-primary-700 font-bold flex items-center gap-3">
