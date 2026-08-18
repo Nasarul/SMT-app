@@ -160,9 +160,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div>
             <div className="flex items-center gap-2 mb-0.5">
               <h2 className="text-xl font-heading font-bold text-neutral-800">Dashboard</h2>
-              <span className="badge-primary text-[10px] px-1.5 py-0">Live</span>
+              <span className="badge-primary text-sm px-1.5 py-0">Live</span>
             </div>
-            <p className="text-[11px] text-neutral-400">
+            <p className="text-sm text-neutral-400">
               Welcome back! Real-time operations overview.
             </p>
           </div>
@@ -170,9 +170,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="hidden lg:flex items-center gap-3 bg-gradient-to-r from-secondary-600 to-primary-500 rounded-xl px-4 py-2 text-white shadow-sm animate-pulse-slow">
             <div className="flex items-center gap-2">
               <Landmark size={14} className="text-gold-400" />
-              <div className="text-[10px] font-bold text-white uppercase tracking-widest">Hajj 2025 Registration Open</div>
+              <div className="text-sm font-bold text-white uppercase tracking-widest">Hajj 2025 Registration Open</div>
             </div>
-            <button onClick={() => onNavigate('hajj-pilgrims')} className="bg-white/20 hover:bg-white/30 text-[10px] font-bold px-3 py-1 rounded-lg transition-colors">
+            <button onClick={() => onNavigate('hajj-pilgrims')} className="bg-white/20 hover:bg-white/30 text-sm font-bold px-3 py-1 rounded-lg transition-colors">
               Apply Now
             </button>
           </div>
@@ -181,12 +181,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       {/* Quick Actions Bar */}
       <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider mr-2">Quick Actions:</span>
+        <span className="text-sm font-bold text-neutral-400 uppercase tracking-wider mr-2">Quick Actions:</span>
         {quickActions.map(action => (
           <button
             key={action.label}
             onClick={() => onNavigate(action.module)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${action.color}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${action.color}`}
           >
             {action.icon}
             <span>{action.label}</span>
@@ -294,7 +294,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
             <button
               onClick={() => onNavigate('tickets-individual')}
-              className="text-primary-500 text-[10px] font-bold hover:underline"
+              className="text-primary-500 text-sm font-bold hover:underline"
             >
               View All
             </button>
@@ -304,37 +304,37 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <table className="w-full">
               <thead>
                 <tr className="text-left border-b border-neutral-50">
-                  <th className="pb-2 text-[10px] font-bold text-primary-400/80 uppercase tracking-widest">Passenger</th>
-                  <th className="pb-2 text-[10px] font-bold text-primary-400/80 uppercase tracking-widest">Route</th>
-                  <th className="pb-2 text-[10px] font-bold text-primary-400/80 uppercase tracking-widest">Date</th>
-                  <th className="pb-2 text-right text-[10px] font-bold text-primary-400/80 uppercase tracking-widest">Amount</th>
-                  <th className="pb-2 text-center text-[10px] font-bold text-primary-400/80 uppercase tracking-widest">Status</th>
+                  <th className="pb-2 text-sm font-bold text-primary-400/80 uppercase tracking-widest">Passenger</th>
+                  <th className="pb-2 text-sm font-bold text-primary-400/80 uppercase tracking-widest">Route</th>
+                  <th className="pb-2 text-sm font-bold text-primary-400/80 uppercase tracking-widest">Date</th>
+                  <th className="pb-2 text-right text-sm font-bold text-primary-400/80 uppercase tracking-widest">Amount</th>
+                  <th className="pb-2 text-center text-sm font-bold text-primary-400/80 uppercase tracking-widest">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-50">
                 {recentTickets.map(ticket => (
                   <tr key={ticket.id} className="group hover:bg-neutral-50/50 transition-colors">
                     <td className="py-2.5">
-                      <div className="text-xs font-bold text-neutral-800 leading-tight">{ticket.passenger_name}</div>
-                      <div className="text-[9px] text-neutral-400 font-mono uppercase">{ticket.ticket_number || 'TKT-PENDING'}</div>
+                      <div className="text-sm font-bold text-neutral-800 leading-tight">{ticket.passenger_name}</div>
+                      <div className="text-xs text-neutral-400 font-mono uppercase">{ticket.ticket_number || 'TKT-PENDING'}</div>
                     </td>
                     <td className="py-2.5">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-600">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-600">
                         <span className="font-bold text-primary-600">{ticket.origin}</span>
                         <Plane size={10} className="text-neutral-300" />
                         <span className="font-bold text-primary-600">{ticket.destination}</span>
                       </div>
-                      <div className="text-[9px] text-neutral-400 uppercase leading-none">{ticket.airline}</div>
+                      <div className="text-xs text-neutral-400 uppercase leading-none">{ticket.airline}</div>
                     </td>
-                    <td className="py-2.5 text-xs text-neutral-600">
+                    <td className="py-2.5 text-sm text-neutral-600">
                       {formatDate(ticket.travel_date)}
                     </td>
                     <td className="py-2.5 text-right">
-                      <div className="text-xs font-black text-neutral-800 leading-tight">{formatBDT(ticket.total_fare)}</div>
-                      <div className="text-[9px] text-success-600 font-bold">Profit: {formatBDT(ticket.profit)}</div>
+                      <div className="text-sm font-black text-neutral-800 leading-tight">{formatBDT(ticket.total_fare)}</div>
+                      <div className="text-xs text-success-600 font-bold">Profit: {formatBDT(ticket.profit)}</div>
                     </td>
                     <td className="py-2.5 text-center">
-                      <Badge variant={getStatusColor(ticket.status) as any} className="text-[9px] px-1.5 py-0">
+                      <Badge variant={getStatusColor(ticket.status) as any} className="text-xs px-1.5 py-0">
                         {ticket.status}
                       </Badge>
                     </td>
@@ -355,7 +355,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
             <button
               onClick={() => onNavigate('hotels-bookings')}
-              className="text-teal-600 text-[10px] font-bold hover:underline"
+              className="text-teal-600 text-sm font-bold hover:underline"
             >
               View All Bookings
             </button>
@@ -365,29 +365,29 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <table className="w-full">
               <thead>
                 <tr className="text-left border-b border-neutral-50">
-                  <th className="pb-2 text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Customer / Ref</th>
-                  <th className="pb-2 text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Hotel & City</th>
-                  <th className="pb-2 text-right text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Fare</th>
-                  <th className="pb-2 text-center text-[10px] font-bold text-teal-600/80 uppercase tracking-widest">Status</th>
+                  <th className="pb-2 text-sm font-bold text-teal-600/80 uppercase tracking-widest">Customer / Ref</th>
+                  <th className="pb-2 text-sm font-bold text-teal-600/80 uppercase tracking-widest">Hotel & City</th>
+                  <th className="pb-2 text-right text-sm font-bold text-teal-600/80 uppercase tracking-widest">Fare</th>
+                  <th className="pb-2 text-center text-sm font-bold text-teal-600/80 uppercase tracking-widest">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-50">
                 {recentHotelBookings.map(hb => (
                   <tr key={hb.id} className="group hover:bg-neutral-50/50 transition-colors">
                     <td className="py-2.5">
-                      <div className="text-xs font-bold text-neutral-800 leading-tight">{hb.customer_name}</div>
-                      <div className="text-[9px] text-teal-600 font-mono font-bold uppercase">{hb.booking_reference}</div>
+                      <div className="text-sm font-bold text-neutral-800 leading-tight">{hb.customer_name}</div>
+                      <div className="text-xs text-teal-600 font-mono font-bold uppercase">{hb.booking_reference}</div>
                     </td>
                     <td className="py-2.5">
-                      <div className="text-xs font-semibold text-neutral-800">{hb.hotel_name}</div>
-                      <div className="text-[9px] text-neutral-400 uppercase">📍 {hb.city}</div>
+                      <div className="text-sm font-semibold text-neutral-800">{hb.hotel_name}</div>
+                      <div className="text-xs text-neutral-400 uppercase">📍 {hb.city}</div>
                     </td>
                     <td className="py-2.5 text-right">
-                      <div className="text-xs font-black text-neutral-800 leading-tight">{formatBDT(hb.total_fare)}</div>
-                      <div className="text-[9px] text-success-600 font-bold">Profit: {formatBDT(hb.profit)}</div>
+                      <div className="text-sm font-black text-neutral-800 leading-tight">{formatBDT(hb.total_fare)}</div>
+                      <div className="text-xs text-success-600 font-bold">Profit: {formatBDT(hb.profit)}</div>
                     </td>
                     <td className="py-2.5 text-center">
-                      <Badge variant={getStatusColor(hb.status) as any} className="text-[9px] px-1.5 py-0">
+                      <Badge variant={getStatusColor(hb.status) as any} className="text-xs px-1.5 py-0">
                         {hb.status}
                       </Badge>
                     </td>

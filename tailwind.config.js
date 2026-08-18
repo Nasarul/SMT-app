@@ -62,8 +62,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'Poppins', 'system-ui', 'sans-serif'],
-        heading: ['Poppins', 'sans-serif'],
+        sans: ['Outfit', 'system-ui', 'sans-serif'],
+        heading: ['Outfit', 'sans-serif'],
       },
       spacing: {
         '18': '4.5rem', '22': '5.5rem', '72': '18rem',
