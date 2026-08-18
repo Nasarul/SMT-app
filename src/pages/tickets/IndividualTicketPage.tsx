@@ -1350,59 +1350,61 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
   }, [showForm, showImportModal, forms, activeTab, saving]);
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in print:p-0 print:m-0">
-      <div className="page-header print:hidden mb-6 bg-white p-5 rounded-2xl shadow-sm border border-neutral-100">
-        <div>
-          <h2 className="text-2xl font-heading font-bold text-neutral-800 flex items-center gap-2">
-            <Plane className="text-primary-500" /> Individual Air Tickets
-          </h2>
-          <p className="text-sm text-neutral-500 mt-1">Retail ticket sales and issuance management</p>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in print:p-0 print:m-0">
+      {/* Top Toolbar */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-neutral-100 mb-6 flex flex-col xl:flex-row gap-4 justify-between items-center print:hidden">
+        
+        {/* Left Side: Search & Filter */}
+        <div className="flex flex-1 w-full xl:w-auto gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <input
+              className="input-field pl-10 w-full bg-neutral-50/50 focus:bg-white"
+              placeholder="Search tickets, PNR, passengers..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <select 
+            className="input-field sm:w-36 bg-neutral-50/50 focus:bg-white"
+          >
+            <option value="">All Status</option>
+            <option value="issued">Issued</option>
+            <option value="voided">Voided</option>
+            <option value="refunded">Refunded</option>
+            <option value="reissued">Reissued</option>
+          </select>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowImportModal(true)} className="btn-outline flex items-center gap-2">
-            <Download size={16} /> Import GDS PDF/Text
+
+        {/* Right Side: Actions */}
+        <div className="flex w-full xl:w-auto gap-2 overflow-x-auto pb-1 xl:pb-0 hide-scrollbar">
+          <button onClick={handleExport} className="btn-outline flex items-center gap-2 px-4 whitespace-nowrap bg-white hover:bg-neutral-50 border-neutral-200">
+            <Download size={15} /> Export
           </button>
+          
+          <div className="w-px h-8 bg-neutral-200 mx-1 hidden sm:block self-center"></div>
+          
+          <button onClick={() => setShowImportModal(true)} className="btn-outline flex items-center gap-2 px-4 whitespace-nowrap bg-primary-50/30 hover:bg-primary-50 border-primary-100 text-primary-700">
+            <Upload size={15} /> Import GDS
+          </button>
+          
           <button onClick={() => { 
             setShowForm(true); 
             setError(''); 
             setSuccess(''); 
             setForms([{ ...emptyForm }]);
             setActiveTab(0);
-            setActiveTab(0);
-          }} className="btn-primary flex items-center gap-2">
-            <Plus size={16} /> Issue New Ticket
+          }} className="btn-primary flex items-center gap-2 px-5 whitespace-nowrap shadow-md shadow-primary-500/25 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+            <Plus size={16} /> Issue Ticket
           </button>
         </div>
       </div>
 
       {success && (
-        <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 text-success-700 rounded-lg mb-4 text-sm">
+        <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 text-success-700 rounded-lg mb-4 text-sm animate-fade-in">
           <CheckCircle size={16} /> {success}
         </div>
       )}
-
-      {/* Filters */}
-      <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3 print:hidden">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-          <input
-            className="input-field pl-9"
-            placeholder="Search by name, PNR, ticket number, airline..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <select className="input-field sm:w-40">
-          <option value="">All Status</option>
-          <option value="issued">Issued</option>
-          <option value="voided">Voided</option>
-          <option value="refunded">Refunded</option>
-          <option value="reissued">Reissued</option>
-        </select>
-        <button onClick={handleExport} className="btn-outline flex items-center gap-2 whitespace-nowrap">
-          <Download size={15} /> Export
-        </button>
-      </div>
 
       {/* Table */}
       <div className="card overflow-hidden print:hidden">
