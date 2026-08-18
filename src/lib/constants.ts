@@ -19,6 +19,7 @@ export const BD_DISTRICTS = [
 export const AIRLINES_FROM_DAC = [
   'Air Arabia',
   'Air Asia',
+  'Air Astra',
   'Air Canada',
   'Air France',
   'Air India',

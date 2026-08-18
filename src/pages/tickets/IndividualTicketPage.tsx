@@ -298,6 +298,23 @@ export function IndividualTicketPage() {
       };
     });
 
+    // Ensure ticket numbers are unique to prevent DB constraint errors
+    const usedTickets = new Set<string>();
+    payloads.forEach((p, idx) => {
+      let tkt = p.ticket_number?.trim();
+      if (!tkt) {
+        tkt = p.pnr ? `${p.pnr}-P${idx + 1}` : `TKT-${Date.now()}-${idx}`;
+      }
+      let finalTkt = tkt;
+      let counter = 1;
+      while (usedTickets.has(finalTkt)) {
+        finalTkt = `${tkt}-${counter}`;
+        counter++;
+      }
+      usedTickets.add(finalTkt);
+      p.ticket_number = finalTkt;
+    });
+
     const isUpdate = forms.length === 1 && (forms[0] as any).id;
 
     if (isUpdate) {
@@ -326,6 +343,19 @@ export function IndividualTicketPage() {
       }
     }
     setSaving(false);
+  };
+
+  const handleDeleteTicket = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this ticket? This action cannot be undone.")) return;
+    
+    const { error } = await supabase.from('air_tickets').delete().eq('id', id);
+    if (error) {
+      setError('Failed to delete ticket: ' + error.message);
+    } else {
+      setSuccess('Ticket deleted successfully.');
+      setTimeout(() => setSuccess(''), 3000);
+      loadTickets();
+    }
   };
 
   const handleEditTicket = (ticket: Ticket) => {
@@ -458,6 +488,47 @@ export function IndividualTicketPage() {
     };
     setForms(prev => [...prev, clonedForm]);
     setActiveTab(forms.length);
+  };
+
+  const handleSplitFare = () => {
+    if (forms.length <= 1) return;
+    
+    const currentForm = forms[activeTab];
+    const totalPassengers = forms.length;
+
+    const splitBase = Math.round(Number(currentForm.base_fare || 0) / totalPassengers);
+    const splitTotal = Math.round(Number(currentForm.total_fare_input || 0) / totalPassengers);
+    const splitBD = Math.round(Number(currentForm.bd || 0) / totalPassengers);
+    const splitUT = Math.round(Number(currentForm.ut || 0) / totalPassengers);
+    const splitE5 = Math.round(Number(currentForm.e5 || 0) / totalPassengers);
+    const splitOW = Math.round(Number(currentForm.ow || 0) / totalPassengers);
+    const splitP7 = Math.round(Number(currentForm.p7 || 0) / totalPassengers);
+    const splitP8 = Math.round(Number(currentForm.p8 || 0) / totalPassengers);
+    const splitE7 = Math.round(Number(currentForm.e7 || 0) / totalPassengers);
+    const splitG8 = Math.round(Number(currentForm.g8 || 0) / totalPassengers);
+    const splitTS = Math.round(Number(currentForm.ts || 0) / totalPassengers);
+    const splitServiceCharge = Math.round(Number(currentForm.service_charge || 0) / totalPassengers);
+    const splitDiscount = Math.round(Number(currentForm.discount || 0) / totalPassengers);
+
+    setForms(prev => prev.map(f => ({
+      ...f,
+      base_fare: splitBase,
+      total_fare_input: splitTotal,
+      bd: splitBD,
+      ut: splitUT,
+      e5: splitE5,
+      ow: splitOW,
+      p7: splitP7,
+      p8: splitP8,
+      e7: splitE7,
+      g8: splitG8,
+      ts: splitTS,
+      service_charge: splitServiceCharge,
+      discount: splitDiscount,
+    })));
+    
+    setSuccess(`Fare split successfully among ${totalPassengers} passengers.`);
+    setTimeout(() => setSuccess(''), 3000);
   };
 
   const updateMetadata = (idx: number, field: 'key' | 'value', val: string) => {
@@ -938,7 +1009,41 @@ export function IndividualTicketPage() {
       newData.ticket_category = 'international';
     }
 
-    setForms([newData]);
+    // Multi-passenger detection
+    let passengersList: { name: string, ticket: string }[] = [];
+    const slashNames = [...text.matchAll(/\b([A-Za-z]{2,}\s*\/\s*[A-Za-z]{2,}\s+(?:MR|MS|MRS|MSTR|MISS|CHD|INF))\b/gi)];
+    const numberedNames = [...text.matchAll(/(?:(?:^|\s)(?:[1-9]|0[1-9])\.)\s*([A-Za-z\s.,/]+?)(?=\s*(?:PNR|TICKET|ETKT|BOOKING|FLIGHT|DATE|TOTAL|FARE|CLASS|130|\d{10,13}|\r|\n|$))/gi)];
+    const titleNames = [...text.matchAll(/\b(?:Mr\.|Mrs\.|Ms\.|Mstr\.|Mr |Ms |Mrs )\s+([A-Za-z\s.]+?)(?=\s+\d{10,14}|\s+MAAS|\s+Adult|\r|\n|$)/gi)];
+
+    if (slashNames.length > 1) {
+      passengersList = slashNames.map(m => ({ name: m[1].trim().toUpperCase(), ticket: '' }));
+    } else if (titleNames.length > 1) {
+      passengersList = titleNames.map(m => ({ name: m[1].trim().toUpperCase(), ticket: '' }));
+    } else if (numberedNames.length > 1) {
+      passengersList = numberedNames.map(m => ({ name: m[1].replace(/[\r\n]+/g, ' ').replace(/^[:\s-]+/, '').trim().toUpperCase(), ticket: '' }));
+    }
+
+    passengersList = passengersList.filter(p => !forbiddenWords.some(w => p.name.includes(w)) && p.name.length > 3);
+
+    const ticketMatchesList = [...text.matchAll(/(?<!\+)\b(\d{3})[-\s]?(\d{10})\b/g)];
+    let ticketNumbersList = Array.from(new Set(ticketMatchesList.map(m => m[1] + m[2])));
+    ticketNumbersList = ticketNumbersList.filter(t => !/^8801\d{9}$/.test(t));
+
+    passengersList.forEach((p, i) => {
+       if (ticketNumbersList[i]) p.ticket = ticketNumbersList[i];
+    });
+
+    if (passengersList.length > 1) {
+      const newForms = passengersList.map(p => ({
+        ...newData,
+        passenger_name: p.name || newData.passenger_name,
+        ticket_number: p.ticket || newData.ticket_number
+      }));
+      setForms(newForms);
+    } else {
+      setForms([newData]);
+    }
+
     setActiveTab(0);
     
     setShowImportModal(false);
@@ -1301,6 +1406,15 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                           </button>
                         </>
                       )}
+                      {(profile as any)?.role?.toLowerCase().replace(/ /g, '_') === 'super_admin' && (
+                        <button 
+                          onClick={() => handleDeleteTicket(ticket.id)}
+                          className="p-1.5 hover:bg-error-50 text-error-600 rounded-lg transition-colors"
+                          title="Delete Ticket"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                       <button 
                         onClick={() => {
                           const text = `✈️ *Flight Details - ${ticket.airline}*\n\n👤 Passenger: ${ticket.passenger_name}\n🎫 Ticket #: ${ticket.ticket_number}\n🔢 PNR: ${ticket.pnr}\n📍 Route: ${ticket.origin} -> ${ticket.destination}\n📅 Date: ${formatDate(ticket.travel_date)}\n\n_Thank you for choosing Sonar Madina Travels!_`;
@@ -1527,8 +1641,17 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
 
           {/* ─── Step 3: Fare & Financials ─── */}
           <div className="bg-amber-50/30 p-3 rounded-xl border border-amber-100 space-y-3 shadow-xs">
-            <div className="text-[11px] font-bold text-amber-700 uppercase tracking-wider border-b border-amber-100 pb-1.5">
-              💰 Step 3 — মূল্য ও কমিশন (Fare & Financials)
+            <div className="text-[11px] font-bold text-amber-700 uppercase tracking-wider border-b border-amber-100 pb-1.5 flex justify-between items-center">
+              <span>💰 Step 3 — মূল্য ও কমিশন (Fare & Financials)</span>
+              {forms.length > 1 && (
+                <button 
+                  onClick={handleSplitFare}
+                  className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] px-2 py-1 rounded-md transition-colors font-bold shadow-sm"
+                  title="Divide current fare equally among all passengers"
+                >
+                  ➗ Split Fare
+                </button>
+              )}
             </div>
 
             {/* Main Fare Inputs */}
