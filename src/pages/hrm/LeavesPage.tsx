@@ -164,26 +164,20 @@ export function LeavesPage() {
   const yearlyReport = getYearlyLeaveData();
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Leave Management</h2>
-          <p className="text-sm text-neutral-500">Track and manage employee leave applications</p>
-        </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => window.print()}
-            className="btn-outline flex items-center gap-2 border-primary-200 text-primary-700"
-          >
-            <Printer size={16} /> Yearly Report
-          </button>
-          <button 
-            onClick={() => setShowApplyModal(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus size={16} /> New Application
-          </button>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end gap-2 mb-4">
+        <button 
+          onClick={() => window.print()}
+          className="btn-outline flex items-center gap-2 border-primary-200 text-primary-700 shadow-sm hover:shadow-md transition-all"
+        >
+          <Printer size={16} /> Yearly Report
+        </button>
+        <button 
+          onClick={() => setShowApplyModal(true)}
+          className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+        >
+          <Plus size={16} /> New Application
+        </button>
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `

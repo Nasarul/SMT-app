@@ -112,17 +112,11 @@ export function SupplierAgingPage() {
   );
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Supplier Aging Report</h2>
-          <p className="text-sm text-neutral-500">Track outstanding payables and credit periods for suppliers</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-outline flex items-center gap-2">
-            <Download size={16} /> Export PDF
-          </button>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end gap-2 mb-4">
+        <button className="btn-outline flex items-center gap-2 shadow-sm hover:shadow-md transition-all">
+          <Download size={16} /> Export PDF
+        </button>
       </div>
 
       {/* Summary Row */}

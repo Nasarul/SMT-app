@@ -37,13 +37,7 @@ export function SMSCampaignPage() {
   const smsCount = Math.ceil(charCount / 160) || 1;
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">SMS Campaigns</h2>
-          <p className="text-sm text-neutral-500">Bulk SMS via SSL Wireless Bangladesh</p>
-        </div>
-      </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
 
       {success && (
         <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 text-success-700 rounded-lg mb-4 text-sm">

@@ -92,15 +92,11 @@ export function B2BAgentsPage() {
   );
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">B2B Agency Partners</h2>
-          <p className="text-sm text-neutral-500">Manage travel agency partners and credit limits</p>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end mb-4">
         <button 
           onClick={() => { setEditingAgent(null); setForm({ is_active: true }); setShowModal(true); }}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
         >
           <Plus size={16} /> Add New Partner
         </button>

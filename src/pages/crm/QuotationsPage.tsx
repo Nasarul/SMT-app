@@ -141,13 +141,9 @@ export function QuotationsPage() {
   );
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in no-print">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Quotation Generator</h2>
-          <p className="text-sm text-neutral-500">Create and manage professional travel quotes</p>
-        </div>
-        <button onClick={() => { setShowForm(true); setError(''); }} className="btn-primary flex items-center gap-2">
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in no-print">
+      <div className="flex justify-end mb-4">
+        <button onClick={() => { setShowForm(true); setError(''); }} className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
           <PlusCircle size={16} /> Create Quotation
         </button>
       </div>

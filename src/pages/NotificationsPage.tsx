@@ -110,13 +110,7 @@ export function NotificationsPage() {
   const filteredAlerts = filter === 'all' ? alerts : alerts.filter(a => a.type === filter);
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">System Notifications</h2>
-          <p className="text-sm text-neutral-500">Automated alerts for passport expiry, visa status, and follow-ups</p>
-        </div>
-      </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar Filters */}

@@ -182,13 +182,9 @@ export function EmployeesPage() {
   };
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Employee Management</h2>
-          <p className="text-sm text-neutral-500">{employees.filter(e => e.is_active).length} active employees</p>
-        </div>
-        <button onClick={() => { setForm(emptyForm); setViewMode(false); setShowForm(true); setError(''); }} className="btn-primary flex items-center gap-2">
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end mb-4">
+        <button onClick={() => { setForm(emptyForm); setViewMode(false); setShowForm(true); setError(''); }} className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
           <Plus size={16} /> Add Employee
         </button>
       </div>

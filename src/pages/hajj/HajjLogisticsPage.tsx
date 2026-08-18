@@ -111,13 +111,7 @@ export function HajjLogisticsPage() {
   );
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Hajj Logistics Tracking</h2>
-          <p className="text-sm text-neutral-500">Manage flights, tents, and accommodation for pilgrims</p>
-        </div>
-      </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

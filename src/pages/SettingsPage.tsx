@@ -317,15 +317,7 @@ export function SettingsPage() {
   );
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in max-w-6xl mx-auto">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">{isAdmin ? 'System Configuration' : 'User Settings'}</h2>
-          <p className="text-sm text-neutral-500">
-            {isAdmin ? 'Manage your business profile, integrations, and access controls' : 'Manage your account security and preferences'}
-          </p>
-        </div>
-      </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in max-w-6xl mx-auto">
 
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">

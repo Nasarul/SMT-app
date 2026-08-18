@@ -286,17 +286,11 @@ export function HotelDirectoryPage() {
   const cities = Array.from(new Set(hotels.map(h => h.city)));
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title flex items-center gap-2">
-            <Building2 className="text-primary-600" size={24} /> Hotel Directory & Information
-          </h2>
-          <p className="text-sm text-neutral-500">Manage partner hotel directory, star category, landmarks, rules & policies</p>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end mb-4">
         <button
           onClick={() => { setEditingHotel(null); setForm(emptyHotelForm); setShowForm(true); setError(''); }}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
         >
           <Plus size={16} /> Add New Hotel
         </button>

@@ -49,16 +49,10 @@ export function CashBookPage() {
   }));
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Daily Cash Book</h2>
-          <p className="text-sm text-neutral-500">Cash transactions for {selectedMonth}</p>
-        </div>
-        <div className="flex gap-2">
-          <input type="month" className="input-field w-44" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} />
-          <button className="btn-outline flex items-center gap-2"><Download size={15} /> Export</button>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end gap-2 mb-4">
+        <input type="month" className="input-field w-44 shadow-sm" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} />
+        <button className="btn-outline flex items-center gap-2 shadow-sm hover:shadow-md transition-all"><Download size={15} /> Export</button>
       </div>
 
       {/* Summary Cards */}

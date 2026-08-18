@@ -151,13 +151,9 @@ export function CustomersPage() {
   const f = (field: string, val: any) => setForm(prev => ({ ...prev, [field]: val }));
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Customer Database</h2>
-          <p className="text-sm text-neutral-500">{customers.length} customers registered</p>
-        </div>
-        <button onClick={() => { setEditingCustomer(null); setForm(emptyForm); setShowForm(true); setError(''); }} className="btn-primary flex items-center gap-2">
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end mb-4">
+        <button onClick={() => { setEditingCustomer(null); setForm(emptyForm); setShowForm(true); setError(''); }} className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
           <Plus size={16} /> Add Customer
         </button>
       </div>

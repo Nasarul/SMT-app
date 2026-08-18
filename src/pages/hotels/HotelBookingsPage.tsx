@@ -431,14 +431,8 @@ export function HotelBookingsPage() {
   const totalProfit = bookings.reduce((sum, b) => sum + (b.profit || 0), 0);
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title flex items-center gap-2">
-            <Building2 className="text-primary-600" size={24} /> Hotel Bookings & Reservations
-          </h2>
-          <p className="text-sm text-neutral-500">Manage individual & group hotel reservations, confirmation vouchers & policies</p>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end mb-4">
         <button
           onClick={() => {
             setEditingBooking(null);
@@ -452,7 +446,7 @@ export function HotelBookingsPage() {
             setError('');
             setActiveTab('details');
           }}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
         >
           <Plus size={16} /> New Hotel Reservation
         </button>

@@ -8,10 +8,7 @@ interface PlaceholderPageProps {
 
 export function PlaceholderPage({ title, description }: PlaceholderPageProps) {
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <h2 className="page-title">{title}</h2>
-      </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
       <div className="card flex flex-col items-center justify-center py-20 gap-4">
         <div className="p-4 bg-warning-50 rounded-2xl">
           <Construction size={40} className="text-warning-500" />
