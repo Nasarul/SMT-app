@@ -64,17 +64,11 @@ export function TicketReportsPage() {
   };
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Ticket Sales Analytics</h2>
-          <p className="text-sm text-neutral-500">Analyze airline performance and revenue trends</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-outline flex items-center gap-2">
-            <Download size={16} /> Export Excel
-          </button>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end mb-4">
+        <button className="btn-outline flex items-center gap-2 bg-white">
+          <Download size={16} /> Export Excel
+        </button>
       </div>
 
       {/* Stats Grid */}

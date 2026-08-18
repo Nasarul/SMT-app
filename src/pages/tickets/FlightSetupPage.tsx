@@ -94,13 +94,7 @@ export function FlightSetupPage() {
   if (loading) return <div className="p-12 text-center text-neutral-400">Loading flight configurations...</div>;
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in max-w-5xl mx-auto">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">Flight Master Setup</h2>
-          <p className="text-sm text-neutral-500">Manage airlines, origins, and destinations for ticket issuance</p>
-        </div>
-      </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in max-w-5xl mx-auto">
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Navigation Sidebar */}

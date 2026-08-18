@@ -192,20 +192,14 @@ export function B2BTicketPage() {
   const tf = (f: string, v: any) => setTicketForm(prev => ({ ...prev, [f]: v }));
 
   return (
-    <div className="p-4 lg:p-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">B2B Group Ticket Sales</h2>
-          <p className="text-sm text-neutral-500">Agency-to-agency group bookings</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => { setShowTicketForm(true); setError(''); }} className="btn-outline flex items-center gap-2">
-            <Plus size={16} /> Issue Group Ticket
-          </button>
-          <button onClick={() => { setShowAgentForm(true); setError(''); }} className="btn-primary flex items-center gap-2">
-            <Building2 size={16} /> Register Agency
-          </button>
-        </div>
+    <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
+      <div className="flex justify-end gap-2 mb-4">
+        <button onClick={() => { setShowTicketForm(true); setError(''); }} className="btn-outline flex items-center gap-2 bg-white">
+          <Plus size={16} /> Issue Group Ticket
+        </button>
+        <button onClick={() => { setShowAgentForm(true); setError(''); }} className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
+          <Building2 size={16} /> Register Agency
+        </button>
       </div>
 
       {success && (
