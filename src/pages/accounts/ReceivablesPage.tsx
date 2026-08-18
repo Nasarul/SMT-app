@@ -3,6 +3,8 @@ import { Landmark, Users, Search, Filter, Download, ArrowUpRight, ArrowDownRight
 import { supabase } from '../../lib/supabase';
 import { formatBDT } from '../../lib/constants';
 import { Badge } from '../../components/ui/Badge';
+import { Modal } from '../../components/ui/Modal';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ReceivableItem {
   id: string;
@@ -16,10 +18,20 @@ interface ReceivableItem {
 }
 
 export function ReceivablesPage() {
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ReceivableItem[]>([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  
+  // Payment Modal State
+  const [showPayment, setShowPayment] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<ReceivableItem | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState('cash');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     loadData();
@@ -34,6 +46,7 @@ export function ReceivablesPage() {
       const { data: tourBookings } = await supabase.from('tour_bookings').select('total_amount, paid_amount, customer_id');
       const { data: umrahPilgrims } = await supabase.from('umrah_pilgrims').select('package_price, total_paid, customer_id');
       const { data: customers } = await supabase.from('customers').select('id, full_name, mobile');
+      const { data: generalReceipts } = await supabase.from('payment_receipts').select('amount, customer_id').eq('module', 'other');
 
       const receivables: ReceivableItem[] = [];
 
@@ -77,6 +90,10 @@ export function ReceivablesPage() {
           paid += Number(v.paid_amount || 0);
         });
 
+        generalReceipts?.filter(r => r.customer_id === cust.id).forEach(r => {
+          paid += Number(r.amount);
+        });
+
         const balance = total - paid;
         if (balance > 0) {
           receivables.push({
@@ -104,6 +121,69 @@ export function ReceivablesPage() {
     (filter === 'all' || item.type === filter) &&
     (item.name.toLowerCase().includes(search.toLowerCase()) || item.mobile.includes(search))
   );
+
+  const handleReceivePayment = async () => {
+    if (!selectedCustomer) return;
+    if (!paymentAmount || Number(paymentAmount) <= 0) {
+      setError('Enter a valid amount');
+      return;
+    }
+    
+    setPaymentLoading(true);
+    setError('');
+
+    try {
+      if (selectedCustomer.type === 'b2b_agent') {
+        // B2B Agents update their current_balance natively via accounts_vouchers trigger or we can insert directly into payment_receipts if the trigger handles b2b correctly.
+        // Actually, payment_receipts trigger updates b2b_agent balance ONLY if module='air_ticket'. 
+        // We will insert into accounts_vouchers directly for B2B to act as a receipt.
+        const { error: vErr } = await supabase.from('accounts_vouchers').insert([{
+          voucher_type: 'receipt',
+          party_name: selectedCustomer.name,
+          cost_center: 'admin',
+          description: `Due payment received from B2B Agent: ${selectedCustomer.name}`,
+          amount: Number(paymentAmount),
+          payment_mode: paymentMode,
+          created_by: profile?.id
+        }]);
+        if (vErr) throw vErr;
+        
+        // Update B2B agent balance
+        const { error: bErr } = await supabase.rpc('update_b2b_balance', { 
+           agent_id: selectedCustomer.id, 
+           amount: Number(paymentAmount) 
+        });
+        // fallback if rpc doesn't exist
+        if (bErr) {
+           const { data: aData } = await supabase.from('b2b_agents').select('current_balance').eq('id', selectedCustomer.id).single();
+           if (aData) {
+              await supabase.from('b2b_agents').update({ current_balance: Number(aData.current_balance) + Number(paymentAmount) }).eq('id', selectedCustomer.id);
+           }
+        }
+      } else {
+        // For general customers, insert into payment_receipts (which handles the voucher via trigger)
+        const { error: pErr } = await supabase.from('payment_receipts').insert([{
+          customer_id: selectedCustomer.id,
+          module: 'other',
+          amount: Number(paymentAmount),
+          payment_mode: paymentMode,
+          notes: 'General Due Payment',
+          created_by: profile?.id
+        }]);
+        if (pErr) throw pErr;
+      }
+      
+      setSuccess(`Payment of ${formatBDT(Number(paymentAmount))} received!`);
+      setShowPayment(false);
+      setPaymentAmount('');
+      loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to process payment');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
 
   return (
     <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
@@ -217,11 +297,18 @@ export function ReceivablesPage() {
                     </td>
                     <td className="table-cell text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <button className="p-2 rounded-lg hover:bg-primary-50 text-primary-600 transition-colors" title="Send Reminder">
-                          <Send size={16} />
+                        <button 
+                          onClick={() => {
+                            setSelectedCustomer(item);
+                            setPaymentAmount(item.balance.toString());
+                            setShowPayment(true);
+                          }}
+                          className="bg-primary-100 hover:bg-primary-200 text-primary-700 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                        >
+                          <Landmark size={14} /> Receive
                         </button>
-                        <button className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors" title="View Ledger">
-                          <FileText size={16} />
+                        <button className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors" title="Send Reminder">
+                          <Send size={16} />
                         </button>
                       </div>
                     </td>
@@ -232,6 +319,46 @@ export function ReceivablesPage() {
           </table>
         </div>
       </div>
+
+      <Modal isOpen={showPayment} onClose={() => setShowPayment(false)} title="Receive Due Payment">
+        <div className="p-5 space-y-4">
+          {error && (
+            <div className="flex gap-2 p-3 bg-error-50 border border-error-200 text-error-700 rounded-lg text-sm">
+              <AlertTriangle size={15} className="shrink-0 mt-0.5" /> {error}
+            </div>
+          )}
+          
+          <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-100">
+            <div className="text-sm text-neutral-500 mb-1">Receiving from:</div>
+            <div className="font-bold text-lg text-neutral-800">{selectedCustomer?.name}</div>
+            <div className="text-sm font-semibold text-error-600 mt-1">Current Due: {formatBDT(selectedCustomer?.balance || 0)}</div>
+          </div>
+
+          <div>
+            <label className="label">Amount to Receive (BDT)</label>
+            <input type="number" min="0" className="input-field text-lg font-bold text-success-700" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} />
+          </div>
+
+          <div>
+            <label className="label">Payment Mode</label>
+            <select className="input-field" value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>
+              <option value="cash">Cash</option>
+              <option value="bank">Bank Transfer</option>
+              <option value="bkash">bKash</option>
+              <option value="nagad">Nagad</option>
+            </select>
+          </div>
+
+          <div className="pt-2 flex gap-3">
+            <button onClick={() => setShowPayment(false)} className="btn-ghost flex-1">Cancel</button>
+            <button onClick={handleReceivePayment} disabled={paymentLoading} className="btn-primary flex-1 flex justify-center items-center gap-2">
+              {paymentLoading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              Confirm Payment
+            </button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 }
