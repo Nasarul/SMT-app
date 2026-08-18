@@ -44,12 +44,25 @@ const navGroups: NavGroup[] = [
       { id: 'tickets-b2b', label: 'B2B Group Sales' },
       { id: 'tickets-suppliers', label: 'Ticket Suppliers' },
       { id: 'tickets-report', label: 'Ticket Reports' },
-      { id: 'umrah-pilgrims', label: 'Umrah Pilgrims' },
-      { id: 'hajj-pilgrims', label: 'Hajj Pilgrims' },
-      { id: 'hajj-logistics', label: 'Hajj Logistics' },
-      { id: 'tours-bookings', label: 'Tour Bookings' },
     ],
     roles: ['super_admin', 'admin', 'sales_agent', 'tour_manager'],
+  },
+  {
+    id: 'hajj-umrah-tours',
+    label: 'Hajj, Umrah & Tours',
+    icon: <Moon size={18} />,
+    items: [
+      { id: 'umrah-packages', label: 'Umrah Packages' },
+      { id: 'umrah-groups', label: 'Umrah Groups' },
+      { id: 'umrah-pilgrims', label: 'Umrah Pilgrims' },
+      { id: 'hajj-packages', label: 'Hajj Packages' },
+      { id: 'hajj-pilgrims', label: 'Hajj Pilgrims' },
+      { id: 'hajj-logistics', label: 'Hajj Logistics' },
+      { id: 'tours-domestic', label: 'Domestic Tours' },
+      { id: 'tours-international', label: 'International Tours' },
+      { id: 'tours-bookings', label: 'Tour Bookings' },
+    ],
+    roles: ['super_admin', 'admin', 'tour_manager'],
   },
   {
     id: 'hotel-ops',
@@ -137,7 +150,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
   const { company } = useSettings();
   const [logoError, setLogoError] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    'sales-ops': true, 'hotel-ops': true, 'accounts-finance': false, 'crm-marketing': false, 'hr-admin': false, 'my-account': false,
+    'sales-ops': true, 'hajj-umrah-tours': false, 'hotel-ops': true, 'accounts-finance': false, 'crm-marketing': false, 'hr-admin': false, 'my-account': false,
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -222,6 +235,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           // Module specific colors
           const groupColors: Record<string, string> = {
             'sales-ops': 'text-blue-400',
+            'hajj-umrah-tours': 'text-indigo-400',
             'hotel-ops': 'text-teal-400',
             'accounts-finance': 'text-emerald-400',
             'crm-marketing': 'text-amber-400',
