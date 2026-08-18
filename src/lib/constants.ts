@@ -164,9 +164,8 @@ export const TOUR_DESTINATIONS_INTERNATIONAL = [
 ];
 
 export const formatBDT = (amount: number | null | undefined) => {
-  if (amount === null || amount === undefined || isNaN(Number(amount))) return '৳ 0.00';
-  const formatted = Number(amount).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `৳ ${formatted}`;
+  if (amount === null || amount === undefined || isNaN(Number(amount))) return '0';
+  return Math.round(Number(amount)).toLocaleString('en-BD');
 };
 
 export const formatDate = (dateStr: string | null | undefined) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2, Edit, Printer, Upload } from 'lucide-react';
+import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2, Edit, Printer, Upload, MoreVertical } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT, formatDate, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
@@ -462,6 +462,39 @@ export function IndividualTicketPage() {
     } catch (e: any) {
       setError(e.message);
     }
+  };
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      setError('No data to export');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    const headers = ['Ticket Number', 'Passenger Name', 'Passport Number', 'Origin', 'Destination', 'Airline', 'PNR', 'Travel Date', 'Total Fare', 'Profit', 'Status'];
+    const csvContent = [
+      headers.join(','),
+      ...filtered.map(t => [
+        t.ticket_number,
+        `"${t.passenger_name || ''}"`,
+        t.passport_number || (t.metadata ? JSON.parse(t.metadata).passport_number : '') || '',
+        t.origin,
+        t.destination,
+        `"${t.airline}"`,
+        t.pnr || '',
+        t.travel_date,
+        t.total_fare,
+        t.profit,
+        t.status
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `air_tickets_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    setSuccess('Exported successfully');
+    setTimeout(() => setSuccess(''), 3000);
   };
 
   const filtered = tickets.filter(t =>
@@ -1318,10 +1351,12 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
 
   return (
     <div className="p-4 lg:p-6 animate-fade-in print:p-0 print:m-0">
-      <div className="page-header print:hidden">
+      <div className="page-header print:hidden mb-6 bg-white p-5 rounded-2xl shadow-sm border border-neutral-100">
         <div>
-          <h2 className="page-title">Individual Air Tickets</h2>
-          <p className="text-sm text-neutral-500">Retail ticket sales management</p>
+          <h2 className="text-2xl font-heading font-bold text-neutral-800 flex items-center gap-2">
+            <Plane className="text-primary-500" /> Individual Air Tickets
+          </h2>
+          <p className="text-sm text-neutral-500 mt-1">Retail ticket sales and issuance management</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowImportModal(true)} className="btn-outline flex items-center gap-2">
@@ -1364,7 +1399,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           <option value="refunded">Refunded</option>
           <option value="reissued">Reissued</option>
         </select>
-        <button className="btn-outline flex items-center gap-2 whitespace-nowrap">
+        <button onClick={handleExport} className="btn-outline flex items-center gap-2 whitespace-nowrap">
           <Download size={15} /> Export
         </button>
       </div>
@@ -1379,20 +1414,19 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                 <th className="table-header text-left">Passenger</th>
                 <th className="table-header text-left">Route</th>
                 <th className="table-header text-left">Airline</th>
-                <th className="table-header text-left">Supplier</th>
                 <th className="table-header text-left">Travel Date</th>
                 <th className="table-header text-right">Total Fare</th>
                 <th className="table-header text-right">Profit</th>
                 <th className="table-header text-center">Status</th>
-                <th className="table-header text-right">Share</th>
+                <th className="table-header text-right">Options</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={10} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>
+                <tr><td colSpan={9} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={10}>
+                <tr><td colSpan={9}>
                   <EmptyState
                     icon={Plane}
                     title="No tickets found"
@@ -1403,36 +1437,39 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
               {filtered.map(ticket => (
                 <tr key={ticket.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
                   <td className="table-cell">
-                    <span className="text-xs font-mono text-primary-600">{ticket.ticket_number}</span>
+                    <span className="text-sm font-mono font-medium text-primary-600">{ticket.ticket_number}</span>
                   </td>
                   <td className="table-cell">
-                    <div className="font-medium text-neutral-800">{ticket.passenger_name}</div>
-                    <div className="text-xs text-neutral-400">
+                    <div className="font-bold text-neutral-800 leading-tight text-xs">{ticket.passenger_name}</div>
+                    <div className="text-xs text-neutral-500 mt-0.5">
                       {ticket.passport_number || (ticket.metadata ? JSON.parse(ticket.metadata).passport_number : '')}
                     </div>
                   </td>
                   <td className="table-cell">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <span className="font-mono font-semibold text-primary-600">{ticket.origin}</span>
-                      <Plane size={12} className="text-neutral-400 rotate-90" />
-                      <span className="font-mono font-semibold text-primary-600">{ticket.destination}</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="font-mono font-bold text-primary-700">{ticket.origin}</div>
+                      <div className="flex-1 border-t-2 border-dashed border-neutral-200 w-4 relative">
+                         <Plane size={11} className="text-primary-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 bg-white" />
+                      </div>
+                      <div className="font-mono font-bold text-primary-700">{ticket.destination}</div>
                     </div>
-                    {ticket.pnr && <div className="text-xs text-neutral-400">PNR: {ticket.pnr}</div>}
+                    {ticket.pnr && <div className="text-xs text-neutral-500 mt-0.5 font-bold uppercase tracking-wider">{ticket.pnr}</div>}
                   </td>
                   <td className="table-cell text-sm">{ticket.airline}</td>
-                  <td className="table-cell">
-                    <div className="text-xs font-medium text-neutral-600">{ticket.suppliers?.company_name || 'Direct'}</div>
-                  </td>
                   <td className="table-cell text-sm">{formatDate(ticket.travel_date)}</td>
                   <td className="table-cell text-right font-semibold text-neutral-800">{formatBDT(ticket.total_fare)}</td>
                   <td className="table-cell text-right font-semibold text-sm">
-                    <span className={ticket.profit >= 0 ? 'text-success-600' : 'text-error-600'}>
-                      {formatBDT(ticket.profit)}
+                    <span className={`px-2 py-1 rounded-md border text-sm font-bold ${
+                      ticket.profit >= 0 
+                        ? 'bg-success-50 text-success-700 border-success-100' 
+                        : 'bg-error-50 text-error-700 border-error-100'
+                    }`}>
+                      {ticket.profit > 0 ? '+' : ''}{formatBDT(ticket.profit)}
                     </span>
                   </td>
                   <td className="table-cell text-center">
                     <select 
-                      className={`text-[11px] font-bold rounded px-2 py-1 border-0 cursor-pointer outline-none shadow-sm ${
+                      className={`text-sm font-bold rounded px-2 py-1 border-0 cursor-pointer outline-none shadow-sm ${
                         ticket.status === 'issued' ? 'bg-success-100 text-success-700' :
                         ticket.status === 'hold' ? 'bg-warning-100 text-warning-700' :
                         ticket.status === 'voided' ? 'bg-neutral-100 text-neutral-700' :
@@ -1448,50 +1485,53 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
                       <option value="reissued">Reissued</option>
                     </select>
                     {ticket.status === 'hold' && ticket.metadata && JSON.parse(ticket.metadata).time_limit && (
-                      <div className="text-[10px] mt-1.5 font-bold text-error-600 bg-error-50 px-1 py-0.5 rounded border border-error-100">
+                      <div className="text-sm mt-1.5 font-bold text-error-600 bg-error-50 px-1.5 py-0.5 rounded border border-error-100">
                         TTL: {new Date(JSON.parse(ticket.metadata).time_limit).toLocaleString()}
                       </div>
                     )}
                   </td>
                   <td className="table-cell text-right">
-                    <div className="flex justify-end items-center gap-1">
-                      {profile && ['admin', 'super_admin', 'tour_manager', 'sales_agent'].includes((profile as any).role?.toLowerCase().replace(/ /g, '_')) && (
-                        <>
-                          <button 
-                            onClick={() => handlePrintTicket(ticket)}
-                            className="p-1.5 hover:bg-neutral-100 text-neutral-600 rounded-lg transition-colors"
-                            title="Print Ticket"
-                          >
-                            <Printer size={16} />
-                          </button>
-                          <button 
-                            onClick={() => handleEditTicket(ticket)}
-                            className="p-1.5 hover:bg-primary-50 text-primary-600 rounded-lg transition-colors"
-                            title="Edit Ticket"
-                          >
-                            <Edit size={16} />
-                          </button>
-                        </>
-                      )}
-                      {(profile as any)?.role?.toLowerCase().replace(/ /g, '_') === 'super_admin' && (
-                        <button 
-                          onClick={() => handleDeleteTicket(ticket.id)}
-                          className="p-1.5 hover:bg-error-50 text-error-600 rounded-lg transition-colors"
-                          title="Delete Ticket"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => {
-                          const text = `✈️ *Flight Details - ${ticket.airline}*\n\n👤 Passenger: ${ticket.passenger_name}\n🎫 Ticket #: ${ticket.ticket_number}\n🔢 PNR: ${ticket.pnr}\n📍 Route: ${ticket.origin} -> ${ticket.destination}\n📅 Date: ${formatDate(ticket.travel_date)}\n\n_Thank you for choosing Sonar Madina Travels!_`;
-                          window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                        }}
-                        className="p-1.5 hover:bg-success-50 text-success-600 rounded-lg transition-colors"
-                        title="Share on WhatsApp"
-                      >
-                        <MessageSquare size={16} />
+                    <div className="relative group inline-block text-left">
+                      <button className="p-1.5 hover:bg-neutral-100 text-neutral-600 rounded-lg transition-colors">
+                        <MoreVertical size={16} />
                       </button>
+                      <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-neutral-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 flex flex-col p-1.5">
+                        {profile && ['admin', 'super_admin', 'tour_manager', 'sales_agent'].includes((profile as any).role?.toLowerCase().replace(/ /g, '_')) && (
+                          <>
+                            <button 
+                              onClick={() => handlePrintTicket(ticket)}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary-600 rounded-lg transition-colors text-left"
+                            >
+                              <Printer size={15} /> Print Ticket
+                            </button>
+                            <button 
+                              onClick={() => handleEditTicket(ticket)}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary-600 rounded-lg transition-colors text-left"
+                            >
+                              <Edit size={15} /> Edit Ticket
+                            </button>
+                          </>
+                        )}
+                        <button 
+                          onClick={() => {
+                            const text = `✈️ *Flight Details - ${ticket.airline}*\n\n👤 Passenger: ${ticket.passenger_name}\n🎫 Ticket #: ${ticket.ticket_number}\n🔢 PNR: ${ticket.pnr}\n📍 Route: ${ticket.origin} -> ${ticket.destination}\n📅 Date: ${formatDate(ticket.travel_date)}\n\n_Thank you for choosing Sonar Madina Travels!_`;
+                            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-success-50 hover:text-success-600 rounded-lg transition-colors text-left"
+                        >
+                          <MessageSquare size={15} /> Share via WA
+                        </button>
+                        {(profile as any)?.role?.toLowerCase().replace(/ /g, '_') === 'super_admin' && (
+                          <div className="mt-1 pt-1 border-t border-neutral-100">
+                            <button 
+                              onClick={() => handleDeleteTicket(ticket.id)}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-error-600 hover:bg-error-50 rounded-lg transition-colors text-left"
+                            >
+                              <Trash2 size={15} /> Delete Ticket
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>
