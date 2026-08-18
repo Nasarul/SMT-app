@@ -197,11 +197,19 @@ export function Header({ title, subtitle, onNavigate }: HeaderProps) {
             onClick={() => setShowProfile(!showProfile)}
             className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-neutral-50 transition-colors group"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-sm">
-              <span className="text-xs font-bold text-white">
-                {profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-              </span>
-            </div>
+            {profile?.avatar_url ? (
+              <img 
+                src={profile.avatar_url} 
+                alt="Profile" 
+                className="w-8 h-8 rounded-lg object-cover shadow-sm"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-sm">
+                <span className="text-xs font-bold text-white">
+                  {profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                </span>
+              </div>
+            )}
             <div className="hidden sm:block text-left mr-1">
               <div className="text-xs font-bold text-neutral-700 flex items-center gap-1">
                 {profile?.full_name || 'User'}
