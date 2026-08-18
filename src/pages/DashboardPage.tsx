@@ -180,22 +180,25 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       </div>
 
       {/* Quick Actions Bar */}
-      <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-sm font-bold text-neutral-400 uppercase tracking-wider mr-2">Quick Actions:</span>
-        {quickActions.map(action => (
-          <button
-            key={action.label}
-            onClick={() => onNavigate(action.module)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${action.color}`}
-          >
-            {action.icon}
-            <span>{action.label}</span>
-          </button>
-        ))}
+      <div className="mb-8">
+        <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-3">Quick Actions</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {quickActions.map(action => (
+            <button
+              key={action.label}
+              onClick={() => onNavigate(action.module)}
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-transparent hover:border-current hover:shadow-md transition-all ${action.color}`}
+            >
+              {action.icon}
+              <span className="text-sm font-semibold">{action.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+      <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-3">Operations Overview</h3>
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         {/* Row 1: Operations */}
         <StatCard
           title="Air Tickets"
@@ -247,7 +250,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-3">Financials & CRM</h3>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* Row 2: Financials & Customers */}
         <StatCard
           title="Monthly Revenue"
@@ -283,9 +287,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Tickets */}
-        <div className="card p-5">
+        <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-heading font-semibold text-neutral-800 text-base flex items-center gap-2 leading-none">
@@ -346,7 +350,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         </div>
 
         {/* Recent Hotel Bookings */}
-        <div className="card p-5">
+        <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-heading font-semibold text-neutral-800 text-base flex items-center gap-2 leading-none">

@@ -23,15 +23,15 @@ export function StatCard({
   className = '',
 }: StatCardProps) {
   return (
-    <div className={`stat-card p-3 ${className}`}>
+    <div className={`stat-card p-4 bg-white border border-neutral-100/50 shadow-sm rounded-xl hover:shadow-md transition-shadow ${className}`}>
       <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${iconBg} shrink-0`}>
-          <Icon size={18} className={iconColor} />
+        <div className={`p-2.5 rounded-xl ${iconBg} shrink-0`}>
+          <Icon size={20} className={iconColor} />
         </div>
         <div className="min-w-0">
-          <div className="text-[10px] font-bold text-primary-400/80 uppercase tracking-widest truncate">{title}</div>
-          <div className="text-lg font-black text-neutral-800 leading-none my-0.5">{value}</div>
-          {subtitle && <div className="text-[9px] text-neutral-400 truncate">{subtitle}</div>}
+          <div className="text-xs font-bold text-neutral-500 uppercase tracking-wider truncate mb-1">{title}</div>
+          <div className="text-xl font-black text-neutral-800 leading-none">{value}</div>
+          {subtitle && <div className="text-xs text-neutral-400 truncate mt-1">{subtitle}</div>}
         </div>
       </div>
     </div>
