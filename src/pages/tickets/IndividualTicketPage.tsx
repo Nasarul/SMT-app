@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2, Edit, Printer, Upload, MoreVertical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plane, Plus, Search, Download, CheckCircle, AlertCircle, MessageSquare, Trash2, Edit, Printer, Upload, MoreVertical, LayoutGrid, List } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { FlightBoardingPassCard } from '../../components/tickets/FlightBoardingPassCard';
 import { formatBDT, formatDate, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -120,6 +121,7 @@ export function IndividualTicketPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   
   // Multi-Passenger State
   const [showForm, setShowForm] = useState(false);
@@ -1385,8 +1387,32 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
           </select>
         </div>
 
-        {/* Right Side: Actions */}
-        <div className="flex w-full xl:w-auto gap-2 overflow-x-auto pb-1 xl:pb-0 hide-scrollbar">
+        {/* Right Side: Actions & View Switcher */}
+        <div className="flex w-full xl:w-auto gap-2 items-center overflow-x-auto pb-1 xl:pb-0 hide-scrollbar">
+          {/* View Toggle */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'table' ? 'bg-white text-slate-800 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Table View"
+            >
+              <List size={14} />
+              <span className="hidden sm:inline">Table</span>
+            </button>
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'cards' ? 'bg-white text-sky-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Boarding Pass Cards View"
+            >
+              <LayoutGrid size={14} />
+              <span className="hidden sm:inline">Boarding Pass</span>
+            </button>
+          </div>
+
           <button onClick={handleExport} className="btn-outline flex items-center gap-2 px-4 whitespace-nowrap bg-white hover:bg-neutral-50 border-neutral-200">
             <Download size={15} /> Export
           </button>
@@ -1415,142 +1441,167 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
         </div>
       )}
 
-      {/* Table */}
-      <div className="card overflow-hidden print:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-neutral-100">
-                <th className="table-header text-left">Ticket #</th>
-                <th className="table-header text-left">Passenger</th>
-                <th className="table-header text-left">Route</th>
-                <th className="table-header text-left">Airline</th>
-                <th className="table-header text-left">Travel Date</th>
-                <th className="table-header text-right">Total Fare</th>
-                <th className="table-header text-right">Profit</th>
-                <th className="table-header text-center">Status</th>
-                <th className="table-header text-right">Options</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr><td colSpan={9} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>
-              )}
-              {!loading && filtered.length === 0 && (
-                <tr><td colSpan={9}>
-                  <EmptyState
-                    icon={Plane}
-                    title="No tickets found"
-                    description="Issue your first ticket to get started"
-                  />
-                </td></tr>
-              )}
-              {filtered.map(ticket => (
-                <tr key={ticket.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
-                  <td className="table-cell">
-                    <span className="text-sm font-mono font-medium text-primary-600">{ticket.ticket_number}</span>
-                  </td>
-                  <td className="table-cell">
-                    <div className="font-bold text-neutral-800 leading-tight text-xs">{ticket.passenger_name}</div>
-                    <div className="text-xs text-neutral-500 mt-0.5">
-                      {ticket.passport_number || (ticket.metadata ? JSON.parse(ticket.metadata).passport_number : '')}
-                    </div>
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-1.5">
-                      <div className="font-mono font-bold text-primary-700">{ticket.origin}</div>
-                      <div className="flex-1 border-t-2 border-dashed border-neutral-200 w-4 relative">
-                         <Plane size={11} className="text-primary-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 bg-white" />
-                      </div>
-                      <div className="font-mono font-bold text-primary-700">{ticket.destination}</div>
-                    </div>
-                    {ticket.pnr && <div className="text-xs text-neutral-500 mt-0.5 font-bold uppercase tracking-wider">{ticket.pnr}</div>}
-                  </td>
-                  <td className="table-cell text-sm">{ticket.airline}</td>
-                  <td className="table-cell text-sm">{formatDate(ticket.travel_date)}</td>
-                  <td className="table-cell text-right font-semibold text-neutral-800">{formatBDT(ticket.total_fare)}</td>
-                  <td className="table-cell text-right font-semibold text-sm">
-                    <span className={`px-2 py-1 rounded-md border text-sm font-bold ${
-                      ticket.profit >= 0 
-                        ? 'bg-success-50 text-success-700 border-success-100' 
-                        : 'bg-error-50 text-error-700 border-error-100'
-                    }`}>
-                      {ticket.profit > 0 ? '+' : ''}{formatBDT(ticket.profit)}
-                    </span>
-                  </td>
-                  <td className="table-cell text-center">
-                    <select 
-                      className={`text-sm font-bold rounded px-2 py-1 border-0 cursor-pointer outline-none shadow-sm ${
-                        ticket.status === 'issued' ? 'bg-success-100 text-success-700' :
-                        ticket.status === 'hold' ? 'bg-warning-100 text-warning-700' :
-                        ticket.status === 'voided' ? 'bg-neutral-100 text-neutral-700' :
-                        'bg-error-100 text-error-700'
-                      }`}
-                      value={ticket.status}
-                      onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
-                    >
-                      <option value="issued">Issued</option>
-                      <option value="hold">Hold</option>
-                      <option value="voided">Voided</option>
-                      <option value="refunded">Refunded</option>
-                      <option value="reissued">Reissued</option>
-                    </select>
-                    {ticket.status === 'hold' && ticket.metadata && JSON.parse(ticket.metadata).time_limit && (
-                      <div className="text-sm mt-1.5 font-bold text-error-600 bg-error-50 px-1.5 py-0.5 rounded border border-error-100">
-                        TTL: {new Date(JSON.parse(ticket.metadata).time_limit).toLocaleString()}
-                      </div>
-                    )}
-                  </td>
-                  <td className="table-cell text-right">
-                    <div className="relative group inline-block text-left">
-                      <button className="p-1.5 hover:bg-neutral-100 text-neutral-600 rounded-lg transition-colors">
-                        <MoreVertical size={16} />
-                      </button>
-                      <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-neutral-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 flex flex-col p-1.5">
-                        {profile && ['admin', 'super_admin', 'tour_manager', 'sales_agent'].includes((profile as any).role?.toLowerCase().replace(/ /g, '_')) && (
-                          <>
-                            <button 
-                              onClick={() => handlePrintTicket(ticket)}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary-600 rounded-lg transition-colors text-left"
-                            >
-                              <Printer size={15} /> Print Ticket
-                            </button>
-                            <button 
-                              onClick={() => handleEditTicket(ticket)}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary-600 rounded-lg transition-colors text-left"
-                            >
-                              <Edit size={15} /> Edit Ticket
-                            </button>
-                          </>
-                        )}
-                        <button 
-                          onClick={() => {
-                            const text = `✈️ *Flight Details - ${ticket.airline}*\n\n👤 Passenger: ${ticket.passenger_name}\n🎫 Ticket #: ${ticket.ticket_number}\n🔢 PNR: ${ticket.pnr}\n📍 Route: ${ticket.origin} -> ${ticket.destination}\n📅 Date: ${formatDate(ticket.travel_date)}\n\n_Thank you for choosing Sonar Madina Travels!_`;
-                            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                          }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-success-50 hover:text-success-600 rounded-lg transition-colors text-left"
-                        >
-                          <MessageSquare size={15} /> Share via WA
-                        </button>
-                        {(profile as any)?.role?.toLowerCase().replace(/ /g, '_') === 'super_admin' && (
-                          <div className="mt-1 pt-1 border-t border-neutral-100">
-                            <button 
-                              onClick={() => handleDeleteTicket(ticket.id)}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-error-600 hover:bg-error-50 rounded-lg transition-colors text-left"
-                            >
-                              <Trash2 size={15} /> Delete Ticket
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Content: Boarding Pass Cards or Table */}
+      {viewMode === 'cards' ? (
+        <div className="space-y-4 print:hidden">
+          {loading && (
+            <div className="py-12 text-center text-slate-400 text-sm">Loading tickets...</div>
+          )}
+          {!loading && filtered.length === 0 && (
+            <EmptyState
+              icon={Plane}
+              title="No tickets found"
+              description="Issue your first ticket to get started"
+            />
+          )}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {filtered.map((ticket) => (
+              <FlightBoardingPassCard
+                key={ticket.id}
+                ticket={ticket}
+                onEdit={() => handleEditTicket(ticket)}
+                onPrint={() => handlePrintTicket(ticket)}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="card overflow-hidden print:hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-neutral-100">
+                  <th className="table-header text-left">Ticket #</th>
+                  <th className="table-header text-left">Passenger</th>
+                  <th className="table-header text-left">Route</th>
+                  <th className="table-header text-left">Airline</th>
+                  <th className="table-header text-left">Travel Date</th>
+                  <th className="table-header text-right">Total Fare</th>
+                  <th className="table-header text-right">Profit</th>
+                  <th className="table-header text-center">Status</th>
+                  <th className="table-header text-right">Options</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={9} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>
+                )}
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={9}>
+                    <EmptyState
+                      icon={Plane}
+                      title="No tickets found"
+                      description="Issue your first ticket to get started"
+                    />
+                  </td></tr>
+                )}
+                {filtered.map(ticket => (
+                  <tr key={ticket.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
+                    <td className="table-cell">
+                      <span className="text-sm font-mono font-medium text-primary-600">{ticket.ticket_number}</span>
+                    </td>
+                    <td className="table-cell">
+                      <div className="font-bold text-neutral-800 leading-tight text-xs">{ticket.passenger_name}</div>
+                      <div className="text-xs text-neutral-500 mt-0.5">
+                        {ticket.passport_number || (ticket.metadata ? JSON.parse(ticket.metadata).passport_number : '')}
+                      </div>
+                    </td>
+                    <td className="table-cell">
+                      <div className="flex items-center gap-1.5">
+                        <div className="font-mono font-bold text-primary-700">{ticket.origin}</div>
+                        <div className="flex-1 border-t-2 border-dashed border-neutral-200 w-4 relative">
+                           <Plane size={11} className="text-primary-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 bg-white" />
+                        </div>
+                        <div className="font-mono font-bold text-primary-700">{ticket.destination}</div>
+                      </div>
+                      {ticket.pnr && <div className="text-xs text-neutral-500 mt-0.5 font-bold uppercase tracking-wider">{ticket.pnr}</div>}
+                    </td>
+                    <td className="table-cell text-sm">{ticket.airline}</td>
+                    <td className="table-cell text-sm">{formatDate(ticket.travel_date)}</td>
+                    <td className="table-cell text-right font-semibold text-neutral-800">{formatBDT(ticket.total_fare)}</td>
+                    <td className="table-cell text-right font-semibold text-sm">
+                      <span className={`px-2 py-1 rounded-md border text-sm font-bold ${
+                        ticket.profit >= 0 
+                          ? 'bg-success-50 text-success-700 border-success-100' 
+                          : 'bg-error-50 text-error-700 border-error-100'
+                      }`}>
+                        {ticket.profit > 0 ? '+' : ''}{formatBDT(ticket.profit)}
+                      </span>
+                    </td>
+                    <td className="table-cell text-center">
+                      <select 
+                        className={`text-sm font-bold rounded px-2 py-1 border-0 cursor-pointer outline-none shadow-sm ${
+                          ticket.status === 'issued' ? 'bg-success-100 text-success-700' :
+                          ticket.status === 'hold' ? 'bg-warning-100 text-warning-700' :
+                          ticket.status === 'voided' ? 'bg-neutral-100 text-neutral-700' :
+                          'bg-error-100 text-error-700'
+                        }`}
+                        value={ticket.status}
+                        onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                      >
+                        <option value="issued">Issued</option>
+                        <option value="hold">Hold</option>
+                        <option value="voided">Voided</option>
+                        <option value="refunded">Refunded</option>
+                        <option value="reissued">Reissued</option>
+                      </select>
+                      {ticket.status === 'hold' && ticket.metadata && JSON.parse(ticket.metadata).time_limit && (
+                        <div className="text-sm mt-1.5 font-bold text-error-600 bg-error-50 px-1.5 py-0.5 rounded border border-error-100">
+                          TTL: {new Date(JSON.parse(ticket.metadata).time_limit).toLocaleString()}
+                        </div>
+                      )}
+                    </td>
+                    <td className="table-cell text-right">
+                      <div className="relative group inline-block text-left">
+                        <button className="p-1.5 hover:bg-neutral-100 text-neutral-600 rounded-lg transition-colors">
+                          <MoreVertical size={16} />
+                        </button>
+                        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-neutral-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 flex flex-col p-1.5">
+                          {profile && ['admin', 'super_admin', 'tour_manager', 'sales_agent'].includes((profile as any).role?.toLowerCase().replace(/ /g, '_')) && (
+                            <>
+                              <button 
+                                onClick={() => handlePrintTicket(ticket)}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary-600 rounded-lg transition-colors text-left"
+                              >
+                                <Printer size={15} /> Print Ticket
+                              </button>
+                              <button 
+                                onClick={() => handleEditTicket(ticket)}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary-600 rounded-lg transition-colors text-left"
+                              >
+                                <Edit size={15} /> Edit Ticket
+                              </button>
+                            </>
+                          )}
+                          <button 
+                            onClick={() => {
+                              const text = `✈️ *Flight Details - ${ticket.airline}*\n\n👤 Passenger: ${ticket.passenger_name}\n🎫 Ticket #: ${ticket.ticket_number}\n🔢 PNR: ${ticket.pnr}\n📍 Route: ${ticket.origin} -> ${ticket.destination}\n📅 Date: ${formatDate(ticket.travel_date)}\n\n_Thank you for choosing Sonar Madina Travels!_`;
+                              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-success-50 hover:text-success-600 rounded-lg transition-colors text-left"
+                          >
+                            <MessageSquare size={15} /> Share via WA
+                          </button>
+                          {(profile as any)?.role?.toLowerCase().replace(/ /g, '_') === 'super_admin' && (
+                            <div className="mt-1 pt-1 border-t border-neutral-100">
+                              <button 
+                                onClick={() => handleDeleteTicket(ticket.id)}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-error-600 hover:bg-error-50 rounded-lg transition-colors text-left"
+                              >
+                                <Trash2 size={15} /> Delete Ticket
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Issue Ticket Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Issue Air Ticket" size="xl">

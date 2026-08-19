@@ -3,6 +3,7 @@ import { Users, Plus, Calendar, Plane, AlertCircle, CheckCircle } from 'lucide-r
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { GroupProgressTimeline } from '../../components/umrah/GroupProgressTimeline';
 import { formatDate, AIRLINES_FROM_DAC } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 
@@ -88,7 +89,25 @@ export function UmrahGroupsPage() {
 
   return (
     <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
-      <div className="flex justify-end mb-4">
+      {/* Featured Active Group Live Timeline */}
+      {!loading && groups.length > 0 && (
+        <div className="mb-6">
+          <GroupProgressTimeline
+            groupName={groups[0].group_name}
+            groupCode={`GRP-${groups[0].id.substring(0, 5).toUpperCase()}`}
+            currentStage={groups[0].status === 'open' ? 'visa' : groups[0].status === 'departed' ? 'flight' : 'completed'}
+            totalPilgrims={groups[0].max_pilgrims || 40}
+            departureDate={groups[0].departure_date}
+            returnDate={groups[0].return_date}
+          />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-heading font-bold text-slate-800 text-lg">Umrah Travel Groups</h3>
+          <p className="text-xs text-slate-400">Manage batches, moallim allotments, and group schedules</p>
+        </div>
         <button onClick={() => { setShowForm(true); setError(''); }} className="btn-primary flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
           <Plus size={16} /> Create Group
         </button>

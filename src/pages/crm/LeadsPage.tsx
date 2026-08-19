@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Plus, Search, Phone, MessageCircle, AlertCircle, CheckCircle } from 'lucide-react';
+import { TrendingUp, Plus, Search, Phone, MessageCircle, AlertCircle, CheckCircle, LayoutGrid, List } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LeadsKanbanBoard } from '../../components/crm/LeadsKanbanBoard';
 import { formatDate } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,6 +42,7 @@ export function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('kanban');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -128,83 +130,127 @@ export function LeadsPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="card p-4 mb-4 flex gap-3">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-          <input className="input-field pl-9" placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Search & View Switcher */}
+      <div className="card p-4 mb-6 flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="flex flex-1 w-full sm:w-auto gap-3">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <input className="input-field pl-9.5" placeholder="Search leads by name, mobile, email..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <select className="input-field w-36" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="">All Status</option>
+            {statusOrder.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+          </select>
         </div>
-        <select className="input-field w-40" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="">All Status</option>
-          {statusOrder.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
-        </select>
+
+        {/* View Mode Toggle */}
+        <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0 self-end sm:self-center">
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <LayoutGrid size={14} />
+            <span>Kanban</span>
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              viewMode === 'table' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <List size={14} />
+            <span>Table</span>
+          </button>
+        </div>
       </div>
 
-      {/* Leads Table */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-neutral-100">
-                <th className="table-header text-left">Lead</th>
-                <th className="table-header text-left">Source</th>
-                <th className="table-header text-left">Interest</th>
-                <th className="table-header text-left">Follow Up</th>
-                <th className="table-header text-center">Status</th>
-                <th className="table-header text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={6} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>}
-              {!loading && filtered.length === 0 && (
-                <tr><td colSpan={6}>
-                  <EmptyState icon={TrendingUp} title="No leads found" description="Add your first lead to start the pipeline" />
-                </td></tr>
-              )}
-              {filtered.map(lead => (
-                <tr key={lead.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
-                  <td className="table-cell">
-                    <div className="font-medium text-neutral-800">{lead.full_name}</div>
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400 mt-0.5">
-                      <Phone size={11} /> {lead.mobile}
-                    </div>
-                  </td>
-                  <td className="table-cell">
-                    <Badge variant="neutral" className="capitalize">{sourceIcons[lead.source] || ''} {lead.source.replace('_', ' ')}</Badge>
-                  </td>
-                  <td className="table-cell text-sm capitalize">{lead.interest.replace('_', ' ')}</td>
-                  <td className="table-cell text-sm text-neutral-600">{formatDate(lead.follow_up_date)}</td>
-                  <td className="table-cell text-center">
-                    <select
-                      value={lead.status}
-                      onChange={e => updateStatus(lead.id, e.target.value)}
-                      className={`text-xs font-medium px-2 py-1 rounded-lg border-0 cursor-pointer ${
-                        lead.status === 'won' ? 'bg-success-100 text-success-700' :
-                        lead.status === 'lost' ? 'bg-error-100 text-error-600' :
-                        lead.status === 'negotiating' ? 'bg-warning-100 text-warning-700' :
-                        'bg-primary-100 text-primary-700'
-                      }`}
-                    >
-                      {statusOrder.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
-                    </select>
-                  </td>
-                  <td className="table-cell text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <a href={`tel:${lead.mobile}`} className="p-1.5 rounded-lg hover:bg-success-50 text-neutral-400 hover:text-success-600 transition-colors">
-                        <Phone size={14} />
-                      </a>
-                      <a href={`https://wa.me/880${lead.mobile.replace(/^0/, '')}`} target="_blank" rel="noreferrer"
-                        className="p-1.5 rounded-lg hover:bg-success-50 text-neutral-400 hover:text-success-600 transition-colors">
-                        <MessageCircle size={14} />
-                      </a>
-                    </div>
-                  </td>
+      {/* Leads Content (Kanban or Table) */}
+      {viewMode === 'kanban' ? (
+        <LeadsKanbanBoard
+          leads={filtered}
+          onStatusChange={updateStatus}
+          onEditLead={(lead) => {
+            setForm({
+              full_name: lead.full_name,
+              mobile: lead.mobile,
+              email: lead.email,
+              source: lead.source,
+              interest: lead.interest,
+              status: lead.status,
+              follow_up_date: lead.follow_up_date,
+              notes: lead.notes,
+            });
+            setShowForm(true);
+          }}
+        />
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-neutral-100">
+                  <th className="table-header text-left">Lead</th>
+                  <th className="table-header text-left">Source</th>
+                  <th className="table-header text-left">Interest</th>
+                  <th className="table-header text-left">Follow Up</th>
+                  <th className="table-header text-center">Status</th>
+                  <th className="table-header text-center">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading && <tr><td colSpan={6} className="py-12 text-center text-neutral-400 text-sm">Loading...</td></tr>}
+                {!loading && filtered.length === 0 && (
+                  <tr><td colSpan={6}>
+                    <EmptyState icon={TrendingUp} title="No leads found" description="Add your first lead to start the pipeline" />
+                  </td></tr>
+                )}
+                {filtered.map(lead => (
+                  <tr key={lead.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
+                    <td className="table-cell">
+                      <div className="font-medium text-neutral-800">{lead.full_name}</div>
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-400 mt-0.5">
+                        <Phone size={11} /> {lead.mobile}
+                      </div>
+                    </td>
+                    <td className="table-cell">
+                      <Badge variant="neutral" className="capitalize">{sourceIcons[lead.source] || ''} {lead.source.replace('_', ' ')}</Badge>
+                    </td>
+                    <td className="table-cell text-sm capitalize">{lead.interest.replace('_', ' ')}</td>
+                    <td className="table-cell text-sm text-neutral-600">{formatDate(lead.follow_up_date)}</td>
+                    <td className="table-cell text-center">
+                      <select
+                        value={lead.status}
+                        onChange={e => updateStatus(lead.id, e.target.value)}
+                        className={`text-xs font-medium px-2 py-1 rounded-lg border-0 cursor-pointer ${
+                          lead.status === 'won' ? 'bg-success-100 text-success-700' :
+                          lead.status === 'lost' ? 'bg-error-100 text-error-600' :
+                          lead.status === 'negotiating' ? 'bg-warning-100 text-warning-700' :
+                          'bg-primary-100 text-primary-700'
+                        }`}
+                      >
+                        {statusOrder.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+                      </select>
+                    </td>
+                    <td className="table-cell text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <a href={`tel:${lead.mobile}`} className="p-1.5 rounded-lg hover:bg-success-50 text-neutral-400 hover:text-success-600 transition-colors">
+                          <Phone size={14} />
+                        </a>
+                        <a href={`https://wa.me/880${lead.mobile.replace(/^0/, '')}`} target="_blank" rel="noreferrer"
+                          className="p-1.5 rounded-lg hover:bg-success-50 text-neutral-400 hover:text-success-600 transition-colors">
+                          <MessageCircle size={14} />
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Add Lead Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Add New Lead">

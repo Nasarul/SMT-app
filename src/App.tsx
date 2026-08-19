@@ -44,6 +44,8 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
+import { ToastProvider } from './contexts/ToastContext';
+import { CommandPalette } from './components/ui/CommandPalette';
 
 const moduleTitles: Record<ActiveModule, { title: string; subtitle?: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Overview of all operations' },
@@ -91,6 +93,7 @@ function AppContent() {
   const { user, loading } = useAuth();
   const [active, setActive] = useState<ActiveModule>('dashboard');
   const [forceLoaded, setForceLoaded] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   useEffect(() => {
     initOfflineSync();
@@ -98,7 +101,21 @@ function AppContent() {
     const timer = setTimeout(() => {
       setForceLoaded(true);
     }, 1500);
-    return () => clearTimeout(timer);
+
+    // Global keyboard shortcut for Spotlight search (Ctrl+K or Cmd+K)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   if (loading && !forceLoaded) {
@@ -163,14 +180,25 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-slate-50/70 text-slate-800">
       <Sidebar active={active} onNavigate={setActive} />
       <div className="lg:ml-64 flex flex-col min-h-screen">
-        <Header title={title} subtitle={subtitle} onNavigate={setActive} />
+        <Header
+          title={title}
+          subtitle={subtitle}
+          onNavigate={setActive}
+          onOpenSearch={() => setIsSearchOpen(true)}
+        />
         <main className="flex-1">
           {renderPage()}
         </main>
       </div>
+
+      <CommandPalette
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onNavigate={setActive}
+      />
     </div>
   );
 }
@@ -179,7 +207,9 @@ export default function App() {
   return (
     <AuthProvider>
       <SettingsProvider>
-        <AppContent />
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
       </SettingsProvider>
     </AuthProvider>
   );

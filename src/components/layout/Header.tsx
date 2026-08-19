@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Calendar, User, LogOut, ChevronDown, ExternalLink, WifiOff, RefreshCcw } from 'lucide-react';
+import { Bell, Calendar, User, LogOut, ChevronDown, ExternalLink, WifiOff, RefreshCcw, Search } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { ActiveModule } from '../layout/Sidebar';
@@ -104,7 +104,7 @@ export function Header({ title, subtitle, onNavigate, onOpenSearch }: HeaderProp
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 bg-white border-b border-neutral-100 px-4 lg:px-6 py-3.5 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-20 bg-white border-b border-neutral-100 px-4 lg:px-6 py-3.5 flex items-center justify-between gap-4 print:hidden">
       <div className="flex items-center gap-4">
         <div className="pl-10 lg:pl-0">
           <h1 className="text-lg font-heading font-semibold text-neutral-800 leading-tight">{title}</h1>
@@ -113,6 +113,19 @@ export function Header({ title, subtitle, onNavigate, onOpenSearch }: HeaderProp
       </div>
 
       <div className="flex items-center gap-2">
+        {onOpenSearch && (
+          <button
+            onClick={onOpenSearch}
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 text-slate-500 hover:text-slate-800 rounded-xl text-xs font-medium transition-all shadow-2xs hover:shadow-xs group mr-1"
+          >
+            <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary-500 transition-colors" />
+            <span className="hidden sm:inline">Search anything...</span>
+            <kbd className="hidden sm:inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded-md">
+              ⌘K
+            </kbd>
+          </button>
+        )}
+
         <div className="hidden sm:flex items-center gap-1.5 text-xs text-neutral-400 bg-neutral-50 px-3 py-1.5 rounded-lg mr-2">
           <Calendar size={13} className="text-primary-500" />
           {dateStr}

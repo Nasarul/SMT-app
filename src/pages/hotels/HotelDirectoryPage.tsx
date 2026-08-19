@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, Search, MapPin, Phone, Star, Edit2, Trash2, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { Building2, Plus, Search, MapPin, Phone, Star, Edit2, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT } from '../../lib/constants';
@@ -355,43 +355,47 @@ export function HotelDirectoryPage() {
         ) : null}
 
         {filteredHotels.map(hotel => (
-          <div key={hotel.id} className="card p-5 hover:shadow-lg transition-all border border-neutral-100 flex flex-col justify-between group">
+          <div key={hotel.id} className="bg-white rounded-3xl p-6 hover:shadow-xl transition-all duration-300 border border-slate-200/80 flex flex-col justify-between group">
             <div>
+              {/* Card Header: Name, City & Stars */}
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div>
-                  <h3 className="font-heading font-bold text-neutral-800 text-lg group-hover:text-primary-600 transition-colors leading-tight">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded-full inline-flex mb-1.5">
+                    <MapPin size={11} className="text-sky-600 shrink-0" />
+                    <span>{hotel.city}</span>, {hotel.country}
+                  </div>
+                  <h3 className="font-heading font-extrabold text-slate-900 text-lg group-hover:text-primary-600 transition-colors leading-tight">
                     {hotel.hotel_name}
                   </h3>
-                  <div className="flex items-center gap-1.5 text-xs text-neutral-500 mt-1">
-                    <MapPin size={13} className="text-primary-500 shrink-0" />
-                    <span className="font-semibold text-neutral-700">{hotel.city}</span>, {hotel.country}
-                  </div>
                 </div>
 
-                <div className="flex items-center gap-0.5 bg-gold-50/50 border border-gold-200/50 px-2 py-1 rounded-full shrink-0">
+                <div className="flex items-center gap-0.5 bg-amber-50 border border-amber-200/60 px-2.5 py-1 rounded-full shrink-0">
                   {Array.from({ length: hotel.star_rating }).map((_, i) => (
-                    <Star key={i} size={11} className="text-gold-500 fill-gold-500" />
+                    <Star key={i} size={11} className="text-amber-500 fill-amber-500" />
                   ))}
+                  <span className="text-[10px] font-black text-amber-900 ml-1">{hotel.star_rating}★</span>
                 </div>
               </div>
 
+              {/* Distance to Haram / Landmark Pill */}
               {hotel.distance_to_landmark && (
-                <div className="text-xs bg-primary-50/70 text-primary-800 px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 font-medium border border-primary-100/50">
-                  <Sparkles size={12} className="text-primary-600" /> {hotel.distance_to_landmark}
+                <div className="text-xs bg-slate-900 text-amber-300 px-3 py-1.5 rounded-xl inline-flex items-center gap-2 font-bold shadow-xs mb-3">
+                  <span>🕋</span>
+                  <span>{hotel.distance_to_landmark}</span>
                 </div>
               )}
 
               {/* Contact Info (Compact) */}
-              <div className="mt-4 pt-4 border-t border-neutral-100 space-y-2">
+              <div className="mt-2 space-y-2">
                 {(hotel.contact_person || hotel.contact_phone) && (
-                  <div className="flex items-center justify-between text-[11px] bg-neutral-50/50 px-3 py-2 rounded-lg border border-neutral-100">
-                    <div className="flex items-center gap-1.5 text-neutral-700">
-                       <span className="font-bold text-neutral-900">{hotel.contact_person || 'No Contact Person'}</span>
+                  <div className="flex items-center justify-between text-xs bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-1.5 text-slate-700 truncate">
+                      <span className="font-bold text-slate-900">{hotel.contact_person || 'Manager'}</span>
                     </div>
                     {hotel.contact_phone && (
-                       <div className="flex items-center gap-1 text-primary-700 font-mono font-bold bg-white px-2 py-0.5 rounded shadow-sm border border-neutral-100">
-                         <Phone size={10} /> {hotel.contact_phone}
-                       </div>
+                      <div className="flex items-center gap-1 text-sky-700 font-mono font-bold bg-white px-2 py-0.5 rounded-md shadow-2xs border border-slate-200">
+                        <Phone size={10} /> {hotel.contact_phone}
+                      </div>
                     )}
                   </div>
                 )}
@@ -400,39 +404,39 @@ export function HotelDirectoryPage() {
               {/* Amenities */}
               {hotel.amenities && hotel.amenities.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {hotel.amenities.slice(0, 3).map((amenity, idx) => (
-                    <span key={idx} className="text-[10px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded-md font-medium border border-neutral-200/50">
+                  {hotel.amenities.slice(0, 4).map((amenity, idx) => (
+                    <span key={idx} className="text-[10px] bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-bold">
                       {amenity}
                     </span>
                   ))}
-                  {hotel.amenities.length > 3 && (
-                    <span className="text-[10px] bg-neutral-50 text-neutral-400 px-2 py-0.5 rounded-md font-bold border border-neutral-100">
-                      +{hotel.amenities.length - 3}
+                  {hotel.amenities.length > 4 && (
+                    <span className="text-[10px] bg-slate-50 text-slate-400 px-2 py-1 rounded-lg font-bold border border-slate-200">
+                      +{hotel.amenities.length - 4} more
                     </span>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center justify-between">
+            <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
               <div>
-                <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Avg Nightly Rate</span>
-                <div className="text-sm font-black text-neutral-900">
-                  {formatBDT(hotel.standard_rate_bdt)} <span className="text-[10px] font-normal text-neutral-400">/ night</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Avg Nightly Rate</span>
+                <div className="text-base font-black text-slate-900 leading-tight">
+                  {formatBDT(hotel.standard_rate_bdt)} <span className="text-[10px] font-normal text-slate-400">/ night</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleEdit(hotel)}
-                  className="p-1.5 hover:bg-neutral-100 text-neutral-500 hover:text-primary-600 rounded-lg transition-colors"
+                  className="p-2 hover:bg-slate-100 text-slate-500 hover:text-sky-600 rounded-xl transition-colors"
                   title="Edit Hotel"
                 >
                   <Edit2 size={16} />
                 </button>
                 <button
                   onClick={() => handleDelete(hotel.id)}
-                  className="p-1.5 hover:bg-error-50 text-neutral-400 hover:text-error-600 rounded-lg transition-colors"
+                  className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors"
                   title="Delete Hotel"
                 >
                   <Trash2 size={16} />
