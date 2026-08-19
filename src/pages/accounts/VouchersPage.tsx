@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Plus, Search, Download, AlertCircle, CheckCircle, MessageSquare } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';

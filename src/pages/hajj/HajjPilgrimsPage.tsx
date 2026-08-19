@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Landmark, Plus, Search, AlertCircle, CheckCircle, Download } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
@@ -70,7 +70,7 @@ export function HajjPilgrimsPage() {
     }
     setSaving(true);
     setError('');
-    const cleanedData = { ...form };
+    const cleanedData: Record<string, any> = { ...form };
     Object.keys(cleanedData).forEach(key => {
       if (cleanedData[key] === '') cleanedData[key] = null;
     });

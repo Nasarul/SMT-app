@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Search, Filter, DollarSign, Calendar, TrendingDown, Trash2, Edit2, Shield, Briefcase, Calculator } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Building2, Plus, Search, DollarSign, TrendingDown, Trash2, Edit2, Shield, Briefcase, Calculator } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';

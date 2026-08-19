@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Plane, Moon, Landmark, Map, Users, DollarSign, TrendingUp,
-  AlertCircle, Clock, Calendar, CreditCard, CheckCircle2,
-  UserPlus, FileText, Send, Plus, ArrowUpRight, Globe, Building2
+  Plane, Moon, Landmark, Map, Users, TrendingUp,
+  CreditCard, CheckCircle2,
+  UserPlus, FileText, Globe, Building2, AlertTriangle
 } from 'lucide-react';
 import { StatCard } from '../components/ui/StatCard';
 import { Badge } from '../components/ui/Badge';
@@ -23,12 +23,6 @@ interface DashboardStats {
   activeVisas: number;
   liquidity: number;
   totalHotelBookings: number;
-}
-
-interface Alert {
-  type: 'warning' | 'error' | 'info';
-  message: string;
-  detail?: string;
 }
 
 interface QuickAction {
@@ -60,7 +54,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   });
   const [recentTickets, setRecentTickets] = useState<any[]>([]);
   const [recentHotelBookings, setRecentHotelBookings] = useState<any[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [expiringPassports, setExpiringPassports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -134,17 +127,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         ]);
       }
 
-      // Dynamic alerts based on expiries
-      const dynamicAlerts: Alert[] = [];
-      if (allExpiring.length > 0) {
-        dynamicAlerts.push({ 
-          type: 'error', 
-          message: 'Urgent Passport Expiries', 
-          detail: `${allExpiring.length} pilgrims have passports expiring within 6 months!` 
-        });
-      }
-      
-      setAlerts(dynamicAlerts);
     } catch (err) {
       console.error('Dashboard load error:', err);
       setStats(prev => ({ ...prev, totalRevenue: 0, activeVisas: 0 }));
@@ -152,6 +134,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="p-12 text-center text-neutral-400 text-sm">
+        Loading dashboard metrics...
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 lg:p-6 animate-fade-in">
@@ -178,6 +168,31 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
         </div>
       </div>
+
+      {/* Expiring Passport Warning */}
+      {expiringPassports.length > 0 && (
+        <div className="mb-6 bg-warning-50 border border-warning-200 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-sm animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-warning-100 text-warning-700 rounded-xl">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-warning-900">
+                {expiringPassports.length} Pilgrim Passports Expiring Within 6 Months
+              </h4>
+              <p className="text-xs text-warning-700 mt-0.5">
+                Review pilgrim records to prevent visa application rejections or travel disruption.
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={() => onNavigate('notifications')}
+            className="px-3 py-1.5 bg-warning-600 hover:bg-warning-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+          >
+            View Alerts
+          </button>
+        </div>
+      )}
 
       {/* Quick Actions Bar */}
       <div className="mb-8">

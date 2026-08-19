@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Search, Users, CreditCard, AlertCircle, CheckCircle, ExternalLink, Mail, Phone, MapPin } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Building2, Plus, Search, AlertCircle, CheckCircle, ExternalLink, Mail, Phone, MapPin, Users } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { formatBDT, formatDate } from '../../lib/constants';
+import { formatBDT } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 
 interface Supplier {

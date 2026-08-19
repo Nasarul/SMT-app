@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Search, Download, Trash2, Printer, PlusCircle, MinusCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Search, Trash2, Printer, PlusCircle, MinusCircle, CheckCircle, AlertCircle, Plane } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -267,7 +267,7 @@ export function QuotationsPage() {
             </div>
             
             <div className="space-y-3">
-              {form.items.map((item: any, idx: number) => (
+              {form.items.map((item: any) => (
                 <div key={item.id} className="flex flex-col md:flex-row gap-3 p-4 bg-neutral-50 rounded-xl border border-neutral-100 relative group">
                   <div className="flex-1">
                     <label className="text-[10px] font-bold text-neutral-400 uppercase mb-1 block">Description</label>

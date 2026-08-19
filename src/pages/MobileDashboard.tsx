@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
-  Plane, Moon, Landmark, Map, Users, DollarSign, TrendingUp, 
-  AlertCircle, Clock, Calendar, CreditCard, CheckCircle2,
-  Globe, RefreshCw, ArrowUpRight, TrendingDown
+  Plane, Moon, DollarSign, TrendingUp, 
+  AlertCircle, CreditCard,
+  Globe, RefreshCw, ArrowUpRight
 } from 'lucide-react';
-import { formatBDT, formatDate } from '../lib/constants';
+import { formatBDT } from '../lib/constants';
 import { supabase } from '../lib/supabase';
 
 interface DashboardStats {

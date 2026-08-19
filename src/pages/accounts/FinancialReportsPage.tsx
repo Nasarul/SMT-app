@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, PieChart, BarChart3, Download, Calendar, Filter, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { TrendingUp, TrendingDown, PieChart, BarChart3, Download, Wallet, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatBDT } from '../../lib/constants';
 import { Badge } from '../../components/ui/Badge';
@@ -15,7 +15,7 @@ interface FinancialSummary {
 export function FinancialReportsPage() {
   const [loading, setLoading] = useState(true);
   const [reportType, setReportType] = useState<'pl' | 'balance_sheet' | 'ait' | 'audit'>('pl');
-  const [dateRange, setDateRange] = useState('this_month');
+  const [dateRange, setDateRange] = useState('all_time');
   const [summary, setSummary] = useState<FinancialSummary>({
     totalRevenue: 0,
     totalExpenses: 0,
@@ -32,11 +32,21 @@ export function FinancialReportsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
+      let query = supabase
         .from('accounts_vouchers')
         .select('*')
-        .eq('is_posted', true)
-        .order('voucher_date', { ascending: false });
+        .eq('is_posted', true);
+
+      const now = new Date();
+      if (dateRange === 'this_month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        query = query.gte('voucher_date', startOfMonth);
+      } else if (dateRange === 'this_year') {
+        const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+        query = query.gte('voucher_date', startOfYear);
+      }
+
+      const { data } = await query.order('voucher_date', { ascending: false });
 
       setVouchers(data || []);
 
@@ -68,11 +78,31 @@ export function FinancialReportsPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="px-4 lg:px-6 py-12 text-center text-neutral-400 text-sm">
+        Compiling financial reports and statements...
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
-      <div className="flex justify-end gap-2 mb-4">
-        <button className="btn-outline flex items-center gap-2 shadow-sm hover:shadow-md transition-all">
-          <Download size={16} /> Export PDF
+      <div className="flex justify-end items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-neutral-200 text-xs text-neutral-600 shadow-sm">
+          <Calendar size={14} className="text-primary-500" />
+          <select 
+            value={dateRange} 
+            onChange={e => setDateRange(e.target.value)}
+            className="bg-transparent font-semibold outline-none cursor-pointer"
+          >
+            <option value="all_time">All Time</option>
+            <option value="this_month">This Month</option>
+            <option value="this_year">This Year</option>
+          </select>
+        </div>
+        <button onClick={() => window.print()} className="btn-outline flex items-center gap-2 shadow-sm hover:shadow-md transition-all">
+          <Download size={16} /> Print / Export
         </button>
       </div>
 

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Landmark, Users, Search, Filter, Download, ArrowUpRight, ArrowDownRight, AlertTriangle, FileText, Send } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Landmark, Users, Search, Download, AlertTriangle, FileText, Send, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatBDT } from '../../lib/constants';
 import { Badge } from '../../components/ui/Badge';
@@ -227,6 +227,12 @@ export function ReceivablesPage() {
         </div>
       </div>
 
+      {success && (
+        <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 text-success-700 rounded-lg mb-4 text-sm">
+          <CheckCircle size={15} /> {success}
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="card p-4 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex items-center gap-2">
@@ -280,7 +286,7 @@ export function ReceivablesPage() {
                       <div className="text-xs text-neutral-400">{item.mobile}</div>
                     </td>
                     <td className="table-cell text-center">
-                      <Badge variant={item.type === 'b2b_agent' ? 'primary' : 'secondary'}>
+                      <Badge variant={item.type === 'b2b_agent' ? 'primary' : 'neutral'}>
                         {item.type.replace('_', ' ').toUpperCase()}
                       </Badge>
                     </td>

@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Search, MapPin, Phone, Mail, Star, Edit2, Trash2, CheckCircle, AlertCircle, Wifi, Coffee, Bus, Sparkles, ScrollText, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Building2, Plus, Search, MapPin, Phone, Star, Edit2, Trash2, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
-import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
 
 export interface Hotel {
   id: string;
@@ -44,67 +42,83 @@ export const initialHotels: Hotel[] = [
   },
   {
     id: 'h-2',
+    hotel_name: 'Hilton Convention Hotel',
+    city: 'Makkah',
+    country: 'Saudi Arabia',
+    star_rating: 5,
+    address: 'Jabal Omar, Ibrahim Al Khalil St, Makkah',
+    contact_person: 'Mr. Tariq Al-Mansoor',
+    contact_phone: '+966 12 537 1234',
+    contact_email: 'makkah.convention@hilton.com',
+    distance_to_landmark: '200m from Haram (Jabal Omar)',
+    amenities: ['Free WiFi', 'Breakfast Included', 'Gym', 'Restaurant', 'Concierge', 'Haram View'],
+    standard_rate_bdt: 19500,
+    hotel_rules: 'Check-in: 15:00 | Check-out: 12:00. Government ID / Passport required.',
+    cancellation_policy: 'Free cancellation up to 48 hours before arrival date.',
+  },
+  {
+    id: 'h-3',
+    hotel_name: 'The Oberoi Madinah',
+    city: 'Madinah',
+    country: 'Saudi Arabia',
+    star_rating: 5,
+    address: 'North Central Area, Madinah',
+    contact_person: 'Sayed Farouq',
+    contact_phone: '+966 14 828 2222',
+    contact_email: 'reservations.madinah@oberoihotels.com',
+    distance_to_landmark: 'Facing Prophet\'s Mosque (Women gate near)',
+    amenities: ['Free WiFi', 'Breakfast Included', 'Luxury Protocol', 'Underground Parking', 'Haram View'],
+    standard_rate_bdt: 26000,
+    hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Non-refundable promotional rate.',
+    cancellation_policy: '100% cancellation fee applies if cancelled within 14 days of stay.',
+  },
+  {
+    id: 'h-4',
     hotel_name: 'Pullman Zamzam Madina',
     city: 'Madinah',
     country: 'Saudi Arabia',
     star_rating: 5,
     address: 'Amr Bin Al Aas Street, Central Area, Madinah',
-    contact_person: 'Tariq Al-Mansoor',
+    contact_person: 'Sheikh Fahad',
     contact_phone: '+966 14 821 0500',
-    contact_email: 'pullman.madinah@accor.com',
-    distance_to_landmark: '150m from Masjid Nabawi',
-    amenities: ['Free WiFi', 'Breakfast Included', 'Shuttle Service', 'Restaurant', 'Air Conditioning'],
-    standard_rate_bdt: 18500,
-    hotel_rules: 'Check-in: 15:00 | Check-out: 12:00. Original Passport required upon arrival.',
-    cancellation_policy: 'Free cancellation up to 7 days before stay. 50% penalty for late cancellation.',
-  },
-  {
-    id: 'h-3',
-    hotel_name: 'Le Méridien Towers Makkah',
-    city: 'Makkah',
-    country: 'Saudi Arabia',
-    star_rating: 4,
-    address: 'Kudai Road, Makkah',
-    contact_person: 'Faisal Al-Otaibi',
-    contact_phone: '+966 12 539 9999',
-    contact_email: 'info.lemeridienmakkah@marriott.com',
-    distance_to_landmark: '800m (24/7 Shuttle to Haram)',
-    amenities: ['Free WiFi', 'Free Shuttle to Haram', 'Breakfast Included', 'Restaurant'],
-    standard_rate_bdt: 12500,
-    hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Shuttle service operates 24/7.',
-    cancellation_policy: 'Free cancellation up to 48 hours prior to check-in.',
-  },
-  {
-    id: 'h-4',
-    hotel_name: 'Sayeman Beach Resort',
-    city: "Cox's Bazar",
-    country: 'Bangladesh',
-    star_rating: 5,
-    address: 'Marine Drive Road, Kolatoli, Cox\'s Bazar',
-    contact_person: 'Rahim Chowdhury',
-    contact_phone: '+880 1755-691917',
-    contact_email: 'reservation@sayemanresort.com',
-    distance_to_landmark: 'Beachfront (Direct Access)',
-    amenities: ['Infinity Pool', 'Free WiFi', 'Sea View', 'Breakfast Included', 'Spa'],
-    standard_rate_bdt: 14000,
-    hotel_rules: 'Check-in: 13:00 | Check-out: 11:00. NID / Passport copy required.',
-    cancellation_policy: 'Non-refundable promo rate. Rescheduling subject to availability.',
+    contact_email: 'h7450@accor.com',
+    distance_to_landmark: '150m from Prophet\'s Mosque',
+    amenities: ['Free WiFi', 'Breakfast Included', 'Business Center', 'International Dining', 'Family Suites'],
+    standard_rate_bdt: 16500,
+    hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Children welcome.',
+    cancellation_policy: 'Free cancellation up to 7 days before check-in.',
   },
   {
     id: 'h-5',
-    hotel_name: 'The Westin Dhaka',
-    city: 'Dhaka',
+    hotel_name: 'Elaf Kinda Hotel',
+    city: 'Makkah',
+    country: 'Saudi Arabia',
+    star_rating: 4,
+    address: 'Al Mesfelah, Ibrahim Al Khalil Street, Makkah',
+    contact_person: 'Ahmed Mansoor',
+    contact_phone: '+966 12 574 5555',
+    contact_email: 'elafkinda@elafgroup.com',
+    distance_to_landmark: '90m from King Fahd Gate (Haram)',
+    amenities: ['Free WiFi', 'Breakfast Included', 'Elevator', '24/7 Desk', 'Express Check-out'],
+    standard_rate_bdt: 12500,
+    hotel_rules: 'Check-in: 16:00 | Check-out: 12:00.',
+    cancellation_policy: 'Cancel up to 3 days prior without fee.',
+  },
+  {
+    id: 'h-6',
+    hotel_name: 'Sayeman Beach Resort',
+    city: 'Cox\'s Bazar',
     country: 'Bangladesh',
     star_rating: 5,
-    address: 'Main Gulshan Avenue, Plot-01, Road 45, Gulshan-2, Dhaka',
-    contact_person: 'Anisur Rahman',
-    contact_phone: '+880 2-9891988',
-    contact_email: 'reservations.dhaka@westin.com',
-    distance_to_landmark: 'Central Gulshan-2',
-    amenities: ['Free WiFi', 'Swimming Pool', 'Gym', 'Multiple Restaurants', 'Airport Shuttle'],
-    standard_rate_bdt: 19500,
-    hotel_rules: 'Check-in: 14:00 | Check-out: 12:00. Government ID card required.',
-    cancellation_policy: 'Free cancellation until 18:00 on arrival day.',
+    address: 'Marine Drive Road, Kolatoli, Cox\'s Bazar',
+    contact_person: 'Zunaid Ahmed',
+    contact_phone: '+880 1755 699901',
+    contact_email: 'reservation@sayemanresort.com',
+    distance_to_landmark: 'Beachfront directly facing Bay of Bengal',
+    amenities: ['Free WiFi', 'Infinity Pool', 'Complimentary Breakfast', 'Sea View Balcony', 'Spa & Fitness'],
+    standard_rate_bdt: 14000,
+    hotel_rules: 'Check-in: 13:00 | Check-out: 11:00. NID / Passport copy required.',
+    cancellation_policy: 'Non-refundable discount rate.',
   }
 ];
 
@@ -112,7 +126,7 @@ const emptyHotelForm = {
   hotel_name: '',
   city: 'Makkah',
   country: 'Saudi Arabia',
-  star_rating: 4,
+  star_rating: 5,
   address: '',
   contact_person: '',
   contact_phone: '',
@@ -125,7 +139,6 @@ const emptyHotelForm = {
 };
 
 export function HotelDirectoryPage() {
-  const { profile } = useAuth();
   const [hotels, setHotels] = useState<Hotel[]>(initialHotels);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -327,7 +340,11 @@ export function HotelDirectoryPage() {
 
       {/* Hotel Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredHotels.length === 0 && (
+        {loading ? (
+          <div className="col-span-full py-12 text-center text-neutral-400 text-sm">
+            Loading hotels directory...
+          </div>
+        ) : filteredHotels.length === 0 ? (
           <div className="col-span-full">
             <EmptyState
               icon={Building2}
@@ -335,7 +352,7 @@ export function HotelDirectoryPage() {
               description="Register new hotels to manage bookings and package rates."
             />
           </div>
-        )}
+        ) : null}
 
         {filteredHotels.map(hotel => (
           <div key={hotel.id} className="card p-5 hover:shadow-lg transition-all border border-neutral-100 flex flex-col justify-between group">

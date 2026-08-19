@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Search, Filter, Calendar, AlertTriangle, Building2, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Download, Search, AlertTriangle, Building2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatBDT, formatDate } from '../../lib/constants';
-import { Badge } from '../../components/ui/Badge';
 
 interface AgingItem {
   supplier_id: string;
@@ -155,7 +154,7 @@ export function SupplierAgingPage() {
           />
         </div>
         <button onClick={loadAgingReport} className="btn-ghost flex items-center gap-2">
-          <Filter size={15} /> Refresh
+          <RefreshCw size={15} /> Refresh
         </button>
       </div>
 

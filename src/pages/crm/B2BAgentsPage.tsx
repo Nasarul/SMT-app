@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Search, Filter, Phone, Mail, MapPin, DollarSign, Edit2, ShieldCheck, ShieldAlert, MoreVertical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Building2, Plus, Search, Phone, MapPin, Edit2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatBDT } from '../../lib/constants';
 import { Badge } from '../../components/ui/Badge';

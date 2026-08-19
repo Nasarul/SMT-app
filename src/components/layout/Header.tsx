@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Search, Calendar, User, LogOut, Settings, ChevronDown, ExternalLink, WifiOff, RefreshCcw } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Bell, Calendar, User, LogOut, ChevronDown, ExternalLink, WifiOff, RefreshCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { ActiveModule } from '../layout/Sidebar';

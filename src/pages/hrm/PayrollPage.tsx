@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Download, Plus, Search, Calendar, CheckCircle2, AlertCircle, FileText, Printer } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { DollarSign, Plus, Calendar, CheckCircle2, AlertCircle, FileText, Printer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useSettings } from '../../contexts/SettingsContext';
 import { formatBDT, formatDate } from '../../lib/constants';

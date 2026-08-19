@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, Plane, Download, Calendar, Filter, PieChart, DollarSign } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BarChart3, TrendingUp, Users, Plane, Download, PieChart, DollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatBDT } from '../../lib/constants';
 import { Badge } from '../../components/ui/Badge';
@@ -63,11 +63,19 @@ export function TicketReportsPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="px-4 lg:px-6 py-12 text-center text-neutral-400 text-sm">
+        Generating ticket reports & analytics...
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
       <div className="flex justify-end mb-4">
-        <button className="btn-outline flex items-center gap-2 bg-white">
-          <Download size={16} /> Export Excel
+        <button onClick={() => window.print()} className="btn-outline flex items-center gap-2 bg-white">
+          <Download size={16} /> Print / Export
         </button>
       </div>
 

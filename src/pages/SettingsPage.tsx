@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Building2, MessageSquare, Shield, Save, Globe, Phone, Mail, MapPin, Key, CheckCircle2, UserPlus, Languages, UserCheck, Search, Upload, Image as ImageIcon, Edit2, Plus, Trash2, Zap, Link as LinkIcon, BellRing, CreditCard, Lock } from 'lucide-react';
+import { Building2, MessageSquare, Shield, Save, Globe, Phone, Mail, MapPin, Key, CheckCircle2, UserPlus, Languages, UserCheck, Search, Upload, Image as ImageIcon, Edit2, Plus, Trash2, Zap, Link as LinkIcon, BellRing, CreditCard, Lock } from 'lucide-react';
 
 import { supabase } from '../lib/supabase';
 import { Badge } from '../components/ui/Badge';
@@ -17,7 +17,7 @@ interface UserProfile {
 }
 
 export function SettingsPage() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const { refreshSettings } = useSettings();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -211,7 +211,7 @@ export function SettingsPage() {
     try {
       // 1. Verify current password by attempting to sign in
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: profile?.email || '',
+        email: user?.email || '',
         password: passwordData.currentPassword,
       });
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
-  LayoutDashboard, Plane, Moon, Landmark, Map, Users, DollarSign, LayoutGrid,
-  UserCog, ChevronDown, ChevronRight, LogOut, Menu, X, Building2,
-  TrendingUp, Calendar, FileText, Star, Globe, Briefcase, Bell, Settings as SettingsIcon
+  LayoutDashboard, Plane, Moon, Users, DollarSign,
+  UserCog, ChevronDown, LogOut, Menu, X, Building2,
+  TrendingUp, Settings as SettingsIcon
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -19,11 +19,11 @@ export type ActiveModule =
   | 'crm-customers' | 'crm-leads' | 'crm-b2b' | 'crm-campaigns' | 'crm-visa' | 'crm-quotations'
   | 'audit-logs' | 'notifications' | 'settings' | 'profile';
 
-
 interface NavItem {
   id: ActiveModule;
   label: string;
   icon?: React.ReactNode;
+  roles?: string[];
 }
 
 interface NavGroup {
@@ -261,7 +261,9 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
               
               {isOpen && (
                 <div className="mt-1 ml-4 space-y-1 border-l border-white/10 pl-2">
-                  {group.items.map(item => (
+                  {group.items
+                    .filter(item => !item.roles || item.roles.includes(normalizedRole) || normalizedRole === 'super_admin')
+                    .map(item => (
                     <button
                       key={item.id}
                       onClick={() => handleNavClick(item.id)}

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Calendar, History, Shield, User, Clock, ArrowRight, Download, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, History, Shield, Clock, ArrowRight, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { formatDate } from '../lib/constants';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 

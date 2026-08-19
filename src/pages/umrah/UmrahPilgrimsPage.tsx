@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, Plus, Search, AlertCircle, CheckCircle, Download } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { formatBDT, formatDate, BLOOD_GROUPS, getStatusColor } from '../../lib/constants';
+import { formatBDT, formatDate, BLOOD_GROUPS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 
 interface Pilgrim {
@@ -72,7 +72,7 @@ export function UmrahPilgrimsPage() {
     }
     setSaving(true);
     setError('');
-    const cleanedData = { ...form };
+    const cleanedData: Record<string, any> = { ...form };
     Object.keys(cleanedData).forEach(key => {
       if (cleanedData[key] === '') cleanedData[key] = null;
     });

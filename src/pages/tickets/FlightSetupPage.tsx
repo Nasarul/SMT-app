@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Plane, Plus, Trash2, MapPin, Building2, Save, Globe } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';

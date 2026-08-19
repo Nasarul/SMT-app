@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Moon, Plus, Star, MapPin, Utensils, Croissant as Visa, AlertCircle, CheckCircle, ToggleLeft, ToggleRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Moon, Plus, Star, MapPin, AlertCircle, CheckCircle, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';

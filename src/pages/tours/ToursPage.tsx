@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Map, Plus, Search, Calendar, Users, AlertCircle, CheckCircle } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
@@ -44,14 +44,17 @@ export function ToursPage({ tourType }: ToursPageProps) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  useEffect(() => { loadTours(); }, [tourType]);
-
   const loadTours = async () => {
     setLoading(true);
     const { data } = await supabase.from('tours').select('*').eq('tour_type', tourType).order('departure_date', { ascending: false });
     setTours(data || []);
     setLoading(false);
   };
+
+  useEffect(() => { 
+    setForm({ ...emptyForm, tour_type: tourType });
+    loadTours(); 
+  }, [tourType]);
 
   const handleSave = async () => {
     if (!form.tour_name || !form.destination || !form.departure_date) {

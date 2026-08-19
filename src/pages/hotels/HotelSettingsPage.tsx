@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings as SettingsIcon, Plus, Edit2, Trash2, Check, X } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, Check, X } from 'lucide-react';
 
 export function HotelSettingsPage() {
   const [activeTab, setActiveTab] = useState<'room' | 'meal'>('room');

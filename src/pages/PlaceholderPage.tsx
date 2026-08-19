@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Construction } from 'lucide-react';
 
 interface PlaceholderPageProps {

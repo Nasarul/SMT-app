@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, Plus, Calendar, Plane, AlertCircle, CheckCircle } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { formatDate, getStatusColor, AIRLINES_FROM_DAC } from '../../lib/constants';
+import { formatDate, AIRLINES_FROM_DAC } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 
 interface UmrahGroup {

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Search, Filter, Globe, Calendar, CheckCircle, AlertCircle, Clock, Trash2, Edit2, MapPin, MessageSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, Globe, CheckCircle, AlertCircle, Clock, Edit2, MapPin, MessageSquare } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -78,7 +78,7 @@ export function VisaPage() {
         setSuccess('Customer found! Name auto-filled.');
         setTimeout(() => setSuccess(''), 3000);
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   };
@@ -94,7 +94,7 @@ export function VisaPage() {
     const total = Number(form.visa_fee) + Number(form.service_charge);
     const profit = total - Number(form.cost_amount);
 
-    const cleanedData = { ...form };
+    const cleanedData: Record<string, any> = { ...form };
     Object.keys(cleanedData).forEach(key => {
       if (cleanedData[key] === '') cleanedData[key] = null;
     });

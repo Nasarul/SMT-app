@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { TrendingUp, Plus, Search, Phone, MessageCircle, AlertCircle, CheckCircle } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
@@ -64,7 +64,7 @@ export function LeadsPage() {
     }
     setSaving(true);
     setError('');
-    const cleanedData = { ...form };
+    const cleanedData: Record<string, any> = { ...form };
     Object.keys(cleanedData).forEach(key => {
       if (cleanedData[key] === '') cleanedData[key] = null;
     });
@@ -170,7 +170,7 @@ export function LeadsPage() {
                     </div>
                   </td>
                   <td className="table-cell">
-                    <Badge variant="neutral" className="capitalize">{lead.source.replace('_', ' ')}</Badge>
+                    <Badge variant="neutral" className="capitalize">{sourceIcons[lead.source] || ''} {lead.source.replace('_', ' ')}</Badge>
                   </td>
                   <td className="table-cell text-sm capitalize">{lead.interest.replace('_', ' ')}</td>
                   <td className="table-cell text-sm text-neutral-600">{formatDate(lead.follow_up_date)}</td>

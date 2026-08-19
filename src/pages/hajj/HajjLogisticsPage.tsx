@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Plane, Tent, Home, Bus, CheckCircle, Info, Search, Filter, Edit3, Save, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plane, Tent, Home, CheckCircle, Info, Search, Edit3, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatDate } from '../../lib/constants';
-import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
-import { EmptyState } from '../../components/ui/EmptyState';
 
 interface LogisticsRecord {
   id: string;

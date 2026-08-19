@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Search, Users, CreditCard, AlertCircle, CheckCircle, Plane, Ticket as TicketIcon, LayoutGrid, List } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Building2, Plus, Search, AlertCircle, CheckCircle, Plane, Ticket as TicketIcon } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';

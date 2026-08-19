@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MapPin, Users, DollarSign, Calendar, Search, Plus, Filter, CheckCircle, XCircle, Clock, MoreVertical, CreditCard } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { MapPin, Users, DollarSign, Search, Plus, Filter, CheckCircle, Clock, MoreVertical, CreditCard } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatBDT, formatDate } from '../../lib/constants';
 import { Badge } from '../../components/ui/Badge';

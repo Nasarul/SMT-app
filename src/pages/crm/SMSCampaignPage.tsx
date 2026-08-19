@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Send, Users, MessageCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Send, MessageCircle, CheckCircle, AlertCircle } from 'lucide-react';
 
 const CAMPAIGN_TEMPLATES = [
   { id: 1, name: 'Eid Greeting', text: 'Eid Mubarak! Sonar Madina Travels wishes you and your family a blessed Eid. Contact us for Hajj/Umrah packages: 01XXXXXXXXX' },

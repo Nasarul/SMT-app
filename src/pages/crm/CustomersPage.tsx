@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, Plus, Search, Phone, Mail, AlertCircle, CheckCircle, Star, Edit2, FileText, Upload, Trash2, Download } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
@@ -44,28 +44,27 @@ export function CustomersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showDocModal, setShowDocModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  
+
   // Dynamic Geo State
   const divisions = Object.keys(BANGLADESH_GEO_DATA);
-  const selectedDivision = BANGLADESH_GEO_DATA[form.division] || {};
+  const selectedDivision = BANGLADESH_GEO_DATA[form.division as keyof typeof BANGLADESH_GEO_DATA] || {};
   const districts = Object.keys(selectedDivision);
-  const upazilas = form.district ? (selectedDivision[form.district] || []) : [];
+  const upazilas = form.district ? (selectedDivision[form.district as keyof typeof selectedDivision] || []) : [];
 
   useEffect(() => {
     // Reset district if it's not in the new division's districts
     if (form.division && !districts.includes(form.district)) {
-      f('district', districts[0] || '');
+      setForm(prev => ({ ...prev, district: districts[0] || '' }));
     }
   }, [form.division, districts]);
 
   useEffect(() => {
     // Reset upazila if it's not in the new district's upazilas
     if (form.district && !upazilas.includes(form.upazila)) {
-      f('upazila', upazilas[0] || '');
+      setForm(prev => ({ ...prev, upazila: upazilas[0] || '' }));
     }
   }, [form.district, upazilas]);
 
@@ -87,7 +86,7 @@ export function CustomersPage() {
     setError('');
     
     try {
-      const cleanedData = { ...form };
+      const cleanedData: Record<string, any> = { ...form };
       Object.keys(cleanedData).forEach(key => {
         if (cleanedData[key] === '') cleanedData[key] = null;
       });

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UserCog, Plus, Search, Phone, Mail, AlertCircle, CheckCircle, Eye, Edit2, Trash2, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, Phone, Mail, AlertCircle, CheckCircle, Eye, Edit2, UserCog, Trash2, Image as ImageIcon } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -68,7 +68,7 @@ export function EmployeesPage() {
     setError('');
     try {
       const house_rent = Number(form.basic_salary) * 0.5;
-      const dataToSave = { ...form, house_rent };
+      const dataToSave: Record<string, any> = { ...form, house_rent };
       
       // Clean empty strings to null for optional database fields
       Object.keys(dataToSave).forEach(key => {
@@ -174,7 +174,7 @@ export function EmployeesPage() {
     }
   };
 
-  const f = (field: string, val: any) => setForm(prev => ({ ...prev, [field]: val }));
+  const f = (field: string, val: any) => setForm((prev: any) => ({ ...prev, [field]: val }));
 
   const deptColors: Record<string, string> = {
     sales: 'primary', operations: 'warning', accounts: 'success',

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, ShieldAlert, Clock, Passport as PassportIcon, CreditCard, UserCheck, Search, Filter, ArrowRight, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bell, ShieldAlert, Clock, CreditCard, UserCheck, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/constants';
 import { Badge } from '../components/ui/Badge';
@@ -86,7 +86,8 @@ export function NotificationsPage() {
         });
       });
 
-      setAlerts(newAlerts.sort((a, b) => (a.priority === 'high' ? -1 : 1)));
+      const priorityOrder = { high: 1, medium: 2, low: 3 };
+      setAlerts(newAlerts.sort((a, b) => (priorityOrder[a.priority] || 3) - (priorityOrder[b.priority] || 3)));
     } catch (err) {
       console.error('Error fetching alerts:', err);
     } finally {

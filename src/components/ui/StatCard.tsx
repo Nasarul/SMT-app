@@ -1,5 +1,4 @@
-import React from 'react';
-import { Video as LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, type LucideIcon } from 'lucide-react';
 
 interface StatCardProps {
   title: string;
@@ -28,12 +27,20 @@ export function StatCard({
         <div className={`p-2.5 rounded-xl ${iconBg} shrink-0`}>
           <Icon size={20} className={iconColor} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="text-xs font-bold text-neutral-500 uppercase tracking-wider truncate mb-1">{title}</div>
           <div className="text-xl font-black text-neutral-800 leading-none">{value}</div>
           {subtitle && <div className="text-xs text-neutral-400 truncate mt-1">{subtitle}</div>}
+          {trend && (
+            <div className={`flex items-center gap-1 text-[11px] font-semibold mt-1.5 ${trend.value >= 0 ? 'text-success-600' : 'text-error-600'}`}>
+              {trend.value >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              <span>{trend.value >= 0 ? `+${trend.value}%` : `${trend.value}%`}</span>
+              <span className="text-neutral-400 font-normal truncate">{trend.label}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+

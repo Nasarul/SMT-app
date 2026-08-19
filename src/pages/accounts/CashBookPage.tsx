@@ -1,14 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Download, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 import { formatBDT, formatDate } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
-
-interface DaySummary {
-  date: string;
-  receipts: number;
-  payments: number;
-  balance: number;
-}
 
 export function CashBookPage() {
   const [vouchers, setVouchers] = useState<any[]>([]);
@@ -31,28 +24,37 @@ export function CashBookPage() {
     setLoading(false);
   };
 
-  const totalReceipts = vouchers.filter(v => v.voucher_type === 'receipt').reduce((s, v) => s + v.amount, 0);
-  const totalPayments = vouchers.filter(v => v.voucher_type === 'payment').reduce((s, v) => s + v.amount, 0);
+  const totalReceipts = vouchers.filter(v => v.voucher_type === 'receipt').reduce((s, v) => s + (Number(v.amount) || 0), 0);
+  const totalPayments = vouchers.filter(v => v.voucher_type === 'payment').reduce((s, v) => s + (Number(v.amount) || 0), 0);
   const closingBalance = totalReceipts - totalPayments;
 
-  // Group by date
-  const dayMap = vouchers.reduce((acc, v) => {
-    const d = v.voucher_date;
-    if (!acc[d]) acc[d] = { receipts: 0, payments: 0 };
-    if (v.voucher_type === 'receipt') acc[d].receipts += v.amount;
-    else if (v.voucher_type === 'payment') acc[d].payments += v.amount;
-    return acc;
-  }, {} as Record<string, { receipts: number; payments: number }>);
-
-  const days = Object.entries(dayMap).map(([date, data]) => ({
-    date, ...data,
-  }));
+  const handleExportCSV = () => {
+    if (vouchers.length === 0) return;
+    const headers = ['Date', 'Voucher #', 'Party', 'Description', 'Cost Center', 'Receipts (BDT)', 'Payments (BDT)'];
+    const rows = vouchers.map(v => [
+      v.voucher_date,
+      v.voucher_number || '',
+      `"${(v.party_name || '').replace(/"/g, '""')}"`,
+      `"${(v.description || '').replace(/"/g, '""')}"`,
+      v.cost_center || '',
+      v.voucher_type === 'receipt' ? v.amount : '',
+      v.voucher_type === 'payment' ? v.amount : ''
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `CashBook_${selectedMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="px-4 lg:px-6 pb-6 pt-2 lg:pt-3 animate-fade-in">
       <div className="flex justify-end gap-2 mb-4">
         <input type="month" className="input-field w-44 shadow-sm" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} />
-        <button className="btn-outline flex items-center gap-2 shadow-sm hover:shadow-md transition-all"><Download size={15} /> Export</button>
+        <button onClick={handleExportCSV} className="btn-outline flex items-center gap-2 shadow-sm hover:shadow-md transition-all"><Download size={15} /> Export CSV</button>
       </div>
 
       {/* Summary Cards */}
@@ -114,7 +116,7 @@ export function CashBookPage() {
                   No cash transactions for this period
                 </td></tr>
               )}
-              {vouchers.map((v, idx) => (
+              {vouchers.map(v => (
                 <tr key={v.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
                   <td className="table-cell text-sm">{formatDate(v.voucher_date)}</td>
                   <td className="table-cell font-mono text-xs text-primary-600">{v.voucher_number}</td>
