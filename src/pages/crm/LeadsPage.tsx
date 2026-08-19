@@ -7,6 +7,7 @@ import { LeadsKanbanBoard } from '../../components/crm/LeadsKanbanBoard';
 import { formatDate } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { audit } from '../../lib/audit';
 
 interface Lead {
   id: string;
@@ -75,6 +76,7 @@ export function LeadsPage() {
       ...cleanedData, created_by: profile?.id, assigned_to: profile?.id,
     }]);
     if (err) { setError(err.message); } else {
+      audit.lead('CREATE', form.full_name, undefined, cleanedData);
       setSuccess('Lead added!');
       setShowForm(false);
       setForm(emptyForm);
@@ -84,7 +86,11 @@ export function LeadsPage() {
   };
 
   const updateStatus = async (id: string, status: string) => {
+    const lead = leads.find(l => l.id === id);
     await supabase.from('crm_leads').update({ status }).eq('id', id);
+    if (lead) {
+      audit.lead('STATUS_CHANGE', lead.full_name, status, { old_status: lead.status, new_status: status });
+    }
     setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
   };
 

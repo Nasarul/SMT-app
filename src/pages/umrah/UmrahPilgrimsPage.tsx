@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT, formatDate, BLOOD_GROUPS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
+import { audit } from '../../lib/audit';
 
 interface Pilgrim {
   id: string;
@@ -79,6 +80,7 @@ export function UmrahPilgrimsPage() {
 
     const { error: err } = await supabase.from('umrah_pilgrims').insert([cleanedData]);
     if (err) { setError(err.message); } else {
+      audit.pilgrim('Umrah', 'CREATE', form.full_name, form.passport_number, cleanedData);
       setSuccess('Pilgrim registered successfully!');
       setShowForm(false);
       setForm(emptyForm);

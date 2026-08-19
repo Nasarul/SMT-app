@@ -6,6 +6,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT, formatDate } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { audit } from '../../lib/audit';
 import { sendWhatsAppMessage, formatVisaWhatsApp } from '../../lib/whatsapp';
 
 interface Visa {
@@ -111,6 +112,7 @@ export function VisaPage() {
     if (err) {
       setError(err.message);
     } else {
+      audit.visa('CREATE', form.passenger_name, form.status, cleanedData);
       setSuccess('Visa application recorded!');
       setShowForm(false);
       setForm(emptyForm);

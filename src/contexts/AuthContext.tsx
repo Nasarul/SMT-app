@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, Profile } from '../lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { audit } from '../lib/audit';
 
 interface AuthContextType {
   user: User | null;
@@ -108,11 +109,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Log in again
             const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
             if (signInError) return { error: signInError.message };
+            audit.auth('LOGIN', email, { type: 'auto_created' });
             return { error: null };
         }
         return { error: error.message };
       }
 
+      audit.auth('LOGIN', email, { type: 'standard' });
       return { error: null };
     } catch (error: any) {
       console.error('Supabase Sign In Error:', error);
@@ -122,6 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      if (user?.email) {
+        audit.auth('LOGOUT', user.email);
+      }
       await supabase.auth.signOut();
       setSession(null);
       setUser(null);

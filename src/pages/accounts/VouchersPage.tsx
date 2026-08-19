@@ -7,6 +7,7 @@ import { formatBDT, formatDate } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { sendWhatsAppMessage, formatReceiptWhatsApp } from '../../lib/whatsapp';
+import { audit } from '../../lib/audit';
 
 interface Voucher {
   id: string;
@@ -70,6 +71,7 @@ export function VouchersPage() {
       ...form, created_by: profile?.id,
     }]);
     if (err) { setError(err.message); } else {
+      audit.accounts('CREATE', `${voucherTypeLabels[form.voucher_type] || 'Voucher'} - ${form.party_name || form.description}`, Number(form.amount), form);
       setSuccess('Voucher created successfully!');
       setShowForm(false);
       setForm(emptyForm);

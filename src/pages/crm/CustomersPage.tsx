@@ -6,6 +6,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { BANGLADESH_GEO_DATA } from '../../lib/geoData';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { audit } from '../../lib/audit';
 
 interface Customer {
   id: string;
@@ -97,12 +98,14 @@ export function CustomersPage() {
           .update(cleanedData)
           .eq('id', editingCustomer.id);
         if (err) throw err;
+        audit.customer('UPDATE', form.full_name, editingCustomer.id, cleanedData);
         setSuccess('Customer updated successfully!');
       } else {
         const { error: err } = await supabase
           .from('customers')
           .insert([{ ...cleanedData, created_by: profile?.id }]);
         if (err) throw err;
+        audit.customer('CREATE', form.full_name, undefined, cleanedData);
         setSuccess('Customer added successfully!');
       }
       
