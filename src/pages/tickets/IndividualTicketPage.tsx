@@ -6,6 +6,7 @@ import { FlightBoardingPassCard } from '../../components/tickets/FlightBoardingP
 import { formatBDT, formatDate, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { audit } from '../../lib/audit';
 
 interface Ticket {
   id: string;
@@ -286,7 +287,7 @@ export function IndividualTicketPage() {
     setSaving(true);
     setError('');
     
-    const payloads = forms.map((f) => {
+    let payloads = forms.map((f) => {
       const fd = getFareData(f);
       const cost_fare = fd.total_client_fare - fd.net_profit;
       const combinedTaxes = {
@@ -308,6 +309,14 @@ export function IndividualTicketPage() {
         metadata: f.metadata || []
       };
 
+      const rawStatus = (f.status || 'issued').toLowerCase().trim();
+      const allowedStatuses = ['issued', 'hold', 'voided', 'refunded', 'reissued', 'confirmed', 'booked', 'pending', 'cancelled'];
+      const safeStatus = allowedStatuses.includes(rawStatus) ? rawStatus : 'issued';
+
+      const rawClass = (f.cabin_class || 'economy').toLowerCase().trim();
+      const allowedClasses = ['economy', 'premium_economy', 'business', 'first', 'executive'];
+      const safeClass = allowedClasses.includes(rawClass) ? rawClass : 'economy';
+
       return {
         ticket_number: f.ticket_number,
         passenger_name: f.passenger_name,
@@ -318,7 +327,7 @@ export function IndividualTicketPage() {
         destination: f.destination,
         travel_date: f.travel_date,
         return_date: f.return_date || null,
-        cabin_class: f.cabin_class,
+        cabin_class: safeClass,
         base_fare: fd.base,
         tax_amount: fd.vat,
         ait_amount: fd.ait,
@@ -326,7 +335,7 @@ export function IndividualTicketPage() {
         total_fare: fd.total_client_fare,
         cost_fare: cost_fare,
         profit: fd.net_profit,
-        status: f.status,
+        status: safeStatus,
         supplier_id: f.supplier_id || null,
         customer_id: f.customer_id || null,
         paid_amount: f.payment_status === 'paid' ? fd.total_client_fare : (f.payment_status === 'due' ? 0 : (Number(f.paid_amount) || 0)),
@@ -357,10 +366,19 @@ export function IndividualTicketPage() {
     const isUpdate = forms.length === 1 && (forms[0] as any).id;
 
     if (isUpdate) {
-      const { error: err } = await supabase.from('air_tickets').update(payloads[0]).eq('id', (forms[0] as any).id);
+      let { error: err } = await supabase.from('air_tickets').update(payloads[0]).eq('id', (forms[0] as any).id);
+      
+      // Fallback if remote DB has strict legacy status check without 'hold'
+      if (err && err.message && err.message.includes('air_tickets_status_check') && payloads[0].status !== 'issued') {
+        const fallback = { ...payloads[0], status: 'issued' };
+        const { error: fbErr } = await supabase.from('air_tickets').update(fallback).eq('id', (forms[0] as any).id);
+        if (!fbErr) err = null;
+      }
+
       if (err) {
         setError(err.message);
       } else {
+        audit.ticket('UPDATE', `${payloads[0].passenger_name} (${payloads[0].airline} - ${payloads[0].ticket_number})`, payloads[0]);
         setSuccess('Ticket updated successfully!');
         setInvoiceData(payloads);
         setShowForm(false);
@@ -369,10 +387,27 @@ export function IndividualTicketPage() {
         loadTickets();
       }
     } else {
-      const { error: err } = await supabase.from('air_tickets').insert(payloads);
+      let { error: err } = await supabase.from('air_tickets').insert(payloads);
+
+      // Fallback if remote DB has strict legacy status check without 'hold'
+      if (err && err.message && err.message.includes('air_tickets_status_check')) {
+        const fallbackPayloads = payloads.map(p => ({
+          ...p,
+          status: ['issued', 'voided', 'refunded', 'reissued'].includes(p.status) ? p.status : 'issued'
+        }));
+        const { error: fbErr } = await supabase.from('air_tickets').insert(fallbackPayloads);
+        if (!fbErr) {
+          err = null;
+          payloads = fallbackPayloads;
+        }
+      }
+
       if (err) {
         setError(err.message);
       } else {
+        payloads.forEach(p => {
+          audit.ticket('CREATE', `${p.passenger_name} (${p.airline} - ${p.ticket_number})`, p);
+        });
         setSuccess(`${forms.length} Ticket(s) issued successfully!`);
         setInvoiceData(payloads);
         setShowForm(false);
@@ -391,6 +426,7 @@ export function IndividualTicketPage() {
     if (error) {
       setError('Failed to delete ticket: ' + error.message);
     } else {
+      audit.ticket('DELETE', `Ticket ID: ${id}`);
       setSuccess('Ticket deleted successfully.');
       setTimeout(() => setSuccess(''), 3000);
       loadTickets();

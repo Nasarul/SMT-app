@@ -6,6 +6,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { formatBDT, formatDate, AIRLINES_FROM_DAC, IATA_AIRPORTS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { audit } from '../../lib/audit';
 
 interface B2BAgent {
   id: string;
@@ -160,6 +161,8 @@ export function B2BTicketPage() {
         passenger_name: name,
         ticket_number: tktNum || rangeTickets[index] || ticketForm.ticket_number,
         supplier_id: ticketForm.supplier_id || null,
+        cabin_class: (ticketForm.cabin_class || 'economy').toLowerCase(),
+        status: 'issued',
         ticket_type: 'b2b_group',
         total_fare: total,
         profit,
@@ -169,6 +172,7 @@ export function B2BTicketPage() {
 
     const { error: err } = await supabase.from('air_tickets').insert(ticketsToInsert);
     if (err) { setError(err.message); } else {
+      audit.ticket('CREATE', `B2B Group: ${ticketForm.airline} (${ticketsToInsert.length} Pax)`, ticketsToInsert);
       setSuccess('Group ticket issued!');
       setShowTicketForm(false);
       setTicketForm(emptyGroupForm);
