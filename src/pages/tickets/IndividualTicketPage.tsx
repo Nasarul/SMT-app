@@ -1302,7 +1302,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
               fetchSuccess = true;
             }
           }
-        } catch (e: any) {
+        } catch {
           // ignore fallback error
         }
       }
@@ -1311,7 +1311,7 @@ Return ONLY a raw JSON array of passenger objects. Do NOT wrap in markdown synta
         throw new Error(lastErrorMessage || "Failed to parse ticket with AI models.");
       }
 
-      let cleanedText = aiResponseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const cleanedText = aiResponseText.replace(/```json/gi, '').replace(/```/g, '').trim();
       const parsedPassengers = JSON.parse(cleanedText);
 
       if (Array.isArray(parsedPassengers) && parsedPassengers.length > 0) {
