@@ -9,9 +9,10 @@ interface HeaderProps {
   title: string;
   subtitle?: string;
   onNavigate?: (mod: ActiveModule) => void;
+  onOpenSearch?: () => void;
 }
 
-export function Header({ title, subtitle, onNavigate }: HeaderProps) {
+export function Header({ title, subtitle, onNavigate, onOpenSearch }: HeaderProps) {
   const { profile, signOut } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
